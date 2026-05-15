@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { Check, Flag, Minus, PenLine, Plus, RotateCcw, Save, Trash2, Users, Wifi, WifiOff, X } from 'lucide-react'
+import { Check, Flag, MapPin, Minus, PenLine, Plus, RotateCcw, Save, Trash2, Users, Wifi, WifiOff, X } from 'lucide-react'
 import DrawingCanvas, { type DrawingCanvasRef, type DrawingTool } from '@/components/scribble/DrawingCanvas'
 import ScribbleToolbar from '@/components/scribble/ScribbleToolbar'
 import ShirtShell from '@/components/shirt/ShirtShell'
@@ -13,6 +13,15 @@ import { cn } from '@/lib/utils/cn'
 import type { Panel, ScribbleRow, ShirtRow } from '@/lib/supabase/types'
 
 type ScribbleMode = 'browse' | 'drawing'
+type SuggestedSpotKind = 'best' | 'big' | 'edge'
+
+interface SuggestedSpot {
+  x: number
+  y: number
+  w: number
+  h: number
+  label: string
+}
 
 interface ShirtViewProps {
   shirt:             ShirtRow
@@ -36,6 +45,65 @@ interface ShirtViewProps {
 const ZOOM_LEVELS = [1, 1.35, 1.75, 2.25, 3]
 const QUICK_EMOJI = '🫶'
 
+function overlapArea(a: SuggestedSpot, b: Pick<ScribbleRow, 'x' | 'y' | 'w' | 'h'>) {
+  const left = Math.max(a.x, b.x)
+  const right = Math.min(a.x + a.w, b.x + b.w)
+  const top = Math.max(a.y, b.y)
+  const bottom = Math.min(a.y + a.h, b.y + b.h)
+
+  return Math.max(0, right - left) * Math.max(0, bottom - top)
+}
+
+function findSuggestedSpot(
+  kind: SuggestedSpotKind,
+  panel: Panel,
+  scribbles: Pick<ScribbleRow, 'x' | 'y' | 'w' | 'h'>[],
+): SuggestedSpot {
+  const size = kind === 'big'
+    ? { w: 180, h: 130 }
+    : kind === 'edge'
+      ? { w: 92, h: 82 }
+      : { w: 126, h: 92 }
+
+  const candidates: SuggestedSpot[] = []
+
+  if (kind === 'edge') {
+    const y = panel === 'sleeves' ? 170 : 150
+    candidates.push(
+      { x: 22, y, w: size.w, h: size.h, label: 'left edge' },
+      { x: SHIRT_W - size.w - 22, y, w: size.w, h: size.h, label: 'right edge' },
+      { x: 34, y: y + 74, w: size.w, h: size.h, label: 'lower left edge' },
+      { x: SHIRT_W - size.w - 34, y: y + 74, w: size.w, h: size.h, label: 'lower right edge' },
+    )
+  } else {
+    const yMin = panel === 'front' ? 122 : 96
+    const yMax = SHIRT_H - size.h - 54
+    const step = kind === 'big' ? 44 : 34
+
+    for (let y = yMin; y <= yMax; y += step) {
+      for (let x = 42; x <= SHIRT_W - size.w - 42; x += step) {
+        candidates.push({ x, y, w: size.w, h: size.h, label: kind === 'big' ? 'wide note spot' : 'open spot' })
+      }
+    }
+  }
+
+  return candidates
+    .map(candidate => {
+      const overlap = scribbles.reduce((total, scribble) => total + overlapArea(candidate, scribble), 0)
+      const centerX = candidate.x + candidate.w / 2
+      const centerY = candidate.y + candidate.h / 2
+      const centrality = Math.abs(centerX - SHIRT_W / 2) * 0.4 + Math.abs(centerY - SHIRT_H * 0.43) * 0.2
+      return { candidate, score: overlap * 12 + centrality }
+    })
+    .sort((a, b) => a.score - b.score)[0]?.candidate ?? {
+      x: 80,
+      y: 160,
+      w: size.w,
+      h: size.h,
+      label: 'open spot',
+    }
+}
+
 export default function ShirtView({
   shirt,
   ownerId,
@@ -55,6 +123,7 @@ export default function ShirtView({
 }: ShirtViewProps) {
   const router = useRouter()
   const drawingRef = useRef<DrawingCanvasRef>(null)
+  const studioScrollRef = useRef<HTMLDivElement>(null)
 
   const [mode, setMode] = useState<ScribbleMode>('browse')
   const [tool, setTool] = useState<DrawingTool>(TOOL_PEN)
@@ -72,6 +141,7 @@ export default function ShirtView({
   const [removedIds, setRemovedIds] = useState<Set<string>>(new Set())
   const [reportedIds, setReportedIds] = useState<Set<string>>(new Set())
   const [hoveredId, setHoveredId] = useState<string | null>(null)
+  const [focusSpot, setFocusSpot] = useState<SuggestedSpot | null>(null)
 
   const {
     viewerCount,
@@ -125,6 +195,7 @@ export default function ShirtView({
     setTool(TOOL_PEN)
     setHasDrawing(false)
     setError(null)
+    setFocusSpot(null)
   }, [])
 
   const cancelStudio = useCallback(() => {
@@ -132,11 +203,40 @@ export default function ShirtView({
     setZoomIndex(0)
     setHasDrawing(false)
     setError(null)
+    setFocusSpot(null)
   }, [])
 
   const handleLocalStroke = useCallback((fabricJson: object) => {
-    setHasDrawing(hasDrawableFabricJson(fabricJson))
+    const drawable = hasDrawableFabricJson(fabricJson)
+    setHasDrawing(drawable)
+    if (drawable) setFocusSpot(null)
   }, [])
+
+  const focusSuggestedSpot = useCallback((kind: SuggestedSpotKind) => {
+    const spot = findSuggestedSpot(kind, panel, displayedScribbles)
+    const nextZoomIndex = kind === 'big' ? 2 : 1
+
+    setFocusSpot(spot)
+    setZoomIndex(nextZoomIndex)
+
+    window.requestAnimationFrame(() => {
+      window.requestAnimationFrame(() => {
+        const scrollEl = studioScrollRef.current
+        if (!scrollEl) return
+
+        const scaleX = scrollEl.scrollWidth / SHIRT_W
+        const scaleY = scrollEl.scrollHeight / SHIRT_H
+        const left = (spot.x + spot.w / 2) * scaleX - scrollEl.clientWidth / 2
+        const top = (spot.y + spot.h / 2) * scaleY - scrollEl.clientHeight / 2
+
+        scrollEl.scrollTo({
+          left: Math.max(0, left),
+          top:  Math.max(0, top),
+          behavior: 'smooth',
+        })
+      })
+    })
+  }, [displayedScribbles, panel])
 
   const handleSaveDirect = useCallback(async () => {
     if (!drawingRef.current) return
@@ -336,7 +436,11 @@ export default function ShirtView({
             )}
 
             {mode === 'drawing' && (
-              <div className="absolute inset-0 overflow-auto bg-white/0" style={{ touchAction: 'pan-x pan-y' }}>
+              <div
+                ref={studioScrollRef}
+                className="absolute inset-0 overflow-auto bg-white/0"
+                style={{ touchAction: 'pan-x pan-y' }}
+              >
                 <div
                   className="relative min-h-full min-w-full"
                   style={{
@@ -345,6 +449,21 @@ export default function ShirtView({
                   }}
                 >
                   {renderSavedScribbles(false)}
+                  {focusSpot && (
+                    <div
+                      className="pointer-events-none absolute rounded-2xl border-2 border-ink-900/50 bg-ink-900/5 shadow-[0_0_0_9999px_rgba(255,255,255,0.18)]"
+                      style={{
+                        left: `${(focusSpot.x / SHIRT_W) * 100}%`,
+                        top: `${(focusSpot.y / SHIRT_H) * 100}%`,
+                        width: `${(focusSpot.w / SHIRT_W) * 100}%`,
+                        height: `${(focusSpot.h / SHIRT_H) * 100}%`,
+                      }}
+                    >
+                      <span className="absolute -top-7 left-0 rounded-full bg-ink-900 px-2 py-1 text-[10px] font-semibold text-white">
+                        {focusSpot.label}
+                      </span>
+                    </div>
+                  )}
                   <DrawingCanvas
                     ref={drawingRef}
                     w={SHIRT_W}
@@ -453,9 +572,29 @@ export default function ShirtView({
               Add {QUICK_EMOJI}
             </button>
             <button
+              onClick={() => focusSuggestedSpot('best')}
+              className="inline-flex items-center gap-1.5 rounded-xl border border-gray-200 px-3 py-2 text-xs font-medium text-ink-900 transition hover:bg-gray-50"
+            >
+              <MapPin size={14} />
+              Find open spot
+            </button>
+            <button
+              onClick={() => focusSuggestedSpot('big')}
+              className="rounded-xl border border-gray-200 px-3 py-2 text-xs font-medium text-ink-900 transition hover:bg-gray-50"
+            >
+              Big note area
+            </button>
+            <button
+              onClick={() => focusSuggestedSpot('edge')}
+              className="rounded-xl border border-gray-200 px-3 py-2 text-xs font-medium text-ink-900 transition hover:bg-gray-50"
+            >
+              Edge mark
+            </button>
+            <button
               onClick={() => {
                 drawingRef.current?.clear()
                 setHasDrawing(false)
+                setFocusSpot(null)
               }}
               className="ml-auto inline-flex items-center gap-2 rounded-xl border border-gray-200 px-3 py-2 text-xs font-medium text-gray-500 transition hover:bg-gray-50"
             >

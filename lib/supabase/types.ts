@@ -18,6 +18,7 @@ export type NotificationType =
   | 'shirt_unlocked'
   | 'admin_broadcast'
   | 'scribble_removed'
+  | 'scribble_reaction'
 
 export type Database = {
   public: {
@@ -294,6 +295,12 @@ export type Database = {
         Update: Record<string, never>
         Relationships: []
       }
+      scribble_reactions: {
+        Row:    { id: string; scribble_id: string; user_id: string; emoji: string; created_at: string }
+        Insert: { id?: string; scribble_id: string; user_id: string; emoji: string; created_at?: string }
+        Update: Record<string, never>
+        Relationships: []
+      }
       platform_settings: {
         Row:    { key: string; value: Json; updated_at: string; updated_by: string | null }
         Insert: { key: string; value: Json; updated_by?: string | null }
@@ -319,3 +326,4 @@ export type ProgramRow        = Database['public']['Tables']['programs']['Row']
 export type BatchRow          = Database['public']['Tables']['batches']['Row']
 export type FriendGroupRow    = Database['public']['Tables']['friend_groups']['Row']
 export type ScribbleRequestRow = Database['public']['Tables']['scribble_requests']['Row']
+export type ScribbleReactionRow = Database['public']['Tables']['scribble_reactions']['Row']

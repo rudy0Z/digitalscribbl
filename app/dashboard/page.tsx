@@ -4,9 +4,11 @@ import { CalendarClock, Search, Shirt, Users } from 'lucide-react'
 import { requirePageUser } from '@/lib/auth/server'
 import AvatarDisplay from '@/components/avatar/AvatarDisplay'
 import NotificationBell from '@/components/notifications/NotificationBell'
+import { ActivityLog } from '@/components/activity/ActivityLog'
 import ShareButton from './ShareButton'
 import { ROUTES, ONLINE_THRESHOLD_MS } from '@/lib/constants'
 import { getPublicSiteUrl } from '@/lib/utils/siteUrl'
+import { buildActivityItems, type ActivityReactionInput, type ActivityScribbleInput, type ActivityUserInput } from '@/lib/utils/activity'
 
 export const dynamic = 'force-dynamic'
 
@@ -80,6 +82,34 @@ export default async function DashboardPage() {
     .select('key, value')
     .in('key', ['scribble_deadline', 'extraction_deadline', 'launch_deadline'])
 
+  const { data: recentOnMyShirt } = shirt
+    ? await supabase
+        .from('scribbles')
+        .select('id, scribbler_id, panel, x, y, w, h, canvas_svg, created_at')
+        .eq('shirt_id', shirt.id)
+        .eq('is_hidden', false)
+        .order('created_at', { ascending: false })
+        .limit(6)
+    : { data: [] }
+
+  const activityScribbles = (recentOnMyShirt ?? []) as ActivityScribbleInput[]
+  const activityScribblerIds = Array.from(new Set(activityScribbles.map(item => item.scribbler_id)))
+  const activityScribbleIds = activityScribbles.map(item => item.id)
+
+  const { data: activityUsers } = activityScribblerIds.length
+    ? await supabase
+        .from('users')
+        .select('id, display_name')
+        .in('id', activityScribblerIds)
+    : { data: [] }
+
+  const { data: activityReactions } = activityScribbleIds.length
+    ? await supabase
+        .from('scribble_reactions')
+        .select('scribble_id, user_id, emoji')
+        .in('scribble_id', activityScribbleIds)
+    : { data: [] }
+
   const deadlineValue = settings?.find(s => ['scribble_deadline', 'extraction_deadline', 'launch_deadline'].includes(s.key))?.value
   const deadlineIso = typeof deadlineValue === 'string'
     ? deadlineValue
@@ -95,6 +125,13 @@ export default async function DashboardPage() {
   await supabase.from('users').update({ last_seen: new Date().toISOString() }).eq('id', user.id)
 
   const batch = profile.batches as unknown as { label: string | null; graduation_year: number; programs: { name: string; academic_groups: { name: string } } } | null
+  const activityItems = buildActivityItems({
+    viewerId:    user.id,
+    shirtOwner:  { id: profile.id, display_name: profile.display_name },
+    scribbles:   activityScribbles,
+    users:       (activityUsers ?? []) as ActivityUserInput[],
+    reactions:   (activityReactions ?? []) as ActivityReactionInput[],
+  })
 
   return (
     <div className="min-h-screen bg-cream-50">
@@ -276,6 +313,15 @@ export default async function DashboardPage() {
           </div>
 
           <aside className="space-y-5">
+            <ActivityLog
+              className="card p-5"
+              items={activityItems}
+              viewerId={user.id}
+              title="On your shirt"
+              eyebrow="React and return"
+              emptyText="Your shirt has no marks yet. Share it or start signing friends first."
+            />
+
             <Link href={ROUTES.explore} className="card flex items-start gap-3 p-5 transition hover:border-gray-200 hover:bg-white">
               <Search size={18} className="mt-0.5 text-gray-400" />
               <div>

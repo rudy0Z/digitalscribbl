@@ -4,10 +4,12 @@ import { requirePageUser } from '@/lib/auth/server'
 import AvatarDisplay from '@/components/avatar/AvatarDisplay'
 import NotificationBell from '@/components/notifications/NotificationBell'
 import ShirtView from '@/components/shirt/ShirtView'
+import { ActivityLog } from '@/components/activity/ActivityLog'
 import RequestScribbleButton from './RequestScribbleButton'
 import ShareButton from '@/app/dashboard/ShareButton'
 import { ROUTES } from '@/lib/constants'
 import { getPublicSiteUrl } from '@/lib/utils/siteUrl'
+import { buildActivityItems, type ActivityReactionInput, type ActivityScribbleInput, type ActivityUserInput } from '@/lib/utils/activity'
 import type { Panel } from '@/lib/supabase/types'
 
 interface Props {
@@ -72,6 +74,34 @@ export default async function ProfilePage({ params, searchParams }: Props) {
     .eq('panel', panel)
     .eq('is_hidden', false)
 
+  const { data: recentActivity } = activeShirt
+    ? await supabase
+        .from('scribbles')
+        .select('id, scribbler_id, panel, x, y, w, h, canvas_svg, created_at')
+        .eq('shirt_id', activeShirt.id)
+        .eq('is_hidden', false)
+        .order('created_at', { ascending: false })
+        .limit(6)
+    : { data: [] }
+
+  const activityScribbles = (recentActivity ?? []) as ActivityScribbleInput[]
+  const activityScribblerIds = Array.from(new Set(activityScribbles.map(item => item.scribbler_id)))
+  const activityScribbleIds = activityScribbles.map(item => item.id)
+
+  const { data: activityUsers } = activityScribblerIds.length
+    ? await supabase
+        .from('users')
+        .select('id, display_name')
+        .in('id', activityScribblerIds)
+    : { data: [] }
+
+  const { data: activityReactions } = activityScribbleIds.length
+    ? await supabase
+        .from('scribble_reactions')
+        .select('scribble_id, user_id, emoji')
+        .in('scribble_id', activityScribbleIds)
+    : { data: [] }
+
   // Check permission
   let canScribble = false
   let permissionState: 'can' | 'request' | 'locked' | 'own' = 'locked'
@@ -115,6 +145,13 @@ export default async function ProfilePage({ params, searchParams }: Props) {
       ]
     : []
   const profileUrl = `${getPublicSiteUrl()}${ROUTES.profile(targetId)}`
+  const activityItems = buildActivityItems({
+    viewerId:    currentUser.id,
+    shirtOwner:  { id: target.id, display_name: target.display_name },
+    scribbles:   activityScribbles,
+    users:       (activityUsers ?? []) as ActivityUserInput[],
+    reactions:   (activityReactions ?? []) as ActivityReactionInput[],
+  })
 
   return (
     <div className="min-h-screen bg-cream-50">
@@ -294,9 +331,18 @@ export default async function ProfilePage({ params, searchParams }: Props) {
                   ? 'You can remove anything from your shirt and share the link for more signatures.'
                   : canScribble
                     ? 'You can sign this shirt now. Open the studio, zoom into the fabric, draw, and save your mark.'
-                    : 'You can view this shirt, but signing is currently restricted.'}
+                  : 'You can view this shirt, but signing is currently restricted.'}
               </p>
             </section>
+
+            <ActivityLog
+              className="card p-5"
+              items={activityItems}
+              viewerId={currentUser.id}
+              title="Recent marks"
+              eyebrow="Sign-back loop"
+              emptyText="No one has signed this shirt yet."
+            />
           </aside>
         </div>
       </main>

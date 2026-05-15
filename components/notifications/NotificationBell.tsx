@@ -169,6 +169,7 @@ function typeEmoji(type: string): string {
     shirt_unlocked:    '🎉',
     admin_broadcast:   '📣',
     scribble_removed:  '🗑️',
+    scribble_reaction: '❤️',
   }
   return map[type] ?? '🔔'
 }
