@@ -8,11 +8,12 @@ import BatchSelect from './BatchSelect'
 export const dynamic = 'force-dynamic'
 
 interface Props {
-  searchParams: { batch?: string }
+  searchParams: Promise<{ batch?: string }>
 }
 
 export default async function AdminYearbookPage({ searchParams }: Props) {
   const { supabase, user } = await requirePageUser()
+  const filters = await searchParams
 
   const { data: me } = await supabase.from('users').select('is_admin').eq('id', user.id).single()
   if (!me?.is_admin) redirect('/dashboard')
@@ -23,7 +24,7 @@ export default async function AdminYearbookPage({ searchParams }: Props) {
     .select('id, label, graduation_year, programs(name, academic_groups(name))')
     .order('graduation_year', { ascending: false })
 
-  const activeBatchId = searchParams.batch ?? ''
+  const activeBatchId = filters.batch ?? ''
 
   // Fetch students in selected batch (or all batches)
   let usersQ = supabase

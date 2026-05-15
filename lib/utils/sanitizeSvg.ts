@@ -31,17 +31,28 @@ export function sanitizeScribbleSvg(input: unknown): SanitizedSvgResult {
     return { ok: false, error: 'SVG is too large' }
   }
 
-  if (!/^<svg[\s>]/i.test(svg)) {
+  let normalizedSvg = svg.replace(/^\uFEFF/, '').trim()
+  let previous = ''
+  while (previous !== normalizedSvg) {
+    previous = normalizedSvg
+    normalizedSvg = normalizedSvg
+      .replace(/^<\?xml[\s\S]*?\?>\s*/i, '')
+      .replace(/^<!doctype[\s\S]*?>\s*/i, '')
+      .replace(/^<!--[\s\S]*?-->\s*/i, '')
+      .trim()
+  }
+
+  if (!/^<svg[\s>]/i.test(normalizedSvg)) {
     return { ok: false, error: 'Invalid SVG root' }
   }
 
-  if (ACTIVE_CONTENT_PATTERN.test(svg) || EVENT_HANDLER_PATTERN.test(svg) || JAVASCRIPT_URL_PATTERN.test(svg)) {
+  if (ACTIVE_CONTENT_PATTERN.test(normalizedSvg) || EVENT_HANDLER_PATTERN.test(normalizedSvg) || JAVASCRIPT_URL_PATTERN.test(normalizedSvg)) {
     return { ok: false, error: 'Unsafe SVG content is not allowed' }
   }
 
-  if (EXTERNAL_REFERENCE_PATTERN.test(svg) || CSS_URL_PATTERN.test(svg)) {
+  if (EXTERNAL_REFERENCE_PATTERN.test(normalizedSvg) || CSS_URL_PATTERN.test(normalizedSvg)) {
     return { ok: false, error: 'External SVG references are not allowed' }
   }
 
-  return { ok: true, svg }
+  return { ok: true, svg: normalizedSvg }
 }

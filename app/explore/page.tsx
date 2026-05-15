@@ -8,21 +8,22 @@ import { ROUTES, ONLINE_THRESHOLD_MS } from '@/lib/constants'
 export const dynamic = 'force-dynamic'
 
 interface Props {
-  searchParams: {
+  searchParams: Promise<{
     q?:     string
     group?: string
     prog?:  string
     batch?: string
     page?:  string
-  }
+  }>
 }
 
 const PAGE_SIZE = 24
 
 export default async function ExplorePage({ searchParams }: Props) {
   const { supabase, user } = await requirePageUser()
+  const filters = await searchParams
 
-  const page  = Math.max(0, Number(searchParams.page ?? 0))
+  const page  = Math.max(0, Number(filters.page ?? 0))
   const cutoff = new Date(Date.now() - ONLINE_THRESHOLD_MS).toISOString()
 
   // Build query
@@ -39,15 +40,15 @@ export default async function ExplorePage({ searchParams }: Props) {
     .order('display_name')
     .range(page * PAGE_SIZE, (page + 1) * PAGE_SIZE - 1)
 
-  if (searchParams.q) {
-    query = query.ilike('display_name', `%${searchParams.q}%`)
+  if (filters.q) {
+    query = query.ilike('display_name', `%${filters.q}%`)
   }
-  if (searchParams.batch) {
-    query = query.eq('batch_id', searchParams.batch)
-  } else if (searchParams.prog) {
-    query = query.eq('program_id', searchParams.prog)
-  } else if (searchParams.group) {
-    query = query.eq('academic_group_id', searchParams.group)
+  if (filters.batch) {
+    query = query.eq('batch_id', filters.batch)
+  } else if (filters.prog) {
+    query = query.eq('program_id', filters.prog)
+  } else if (filters.group) {
+    query = query.eq('academic_group_id', filters.group)
   }
 
   const { data: users } = await query
@@ -62,11 +63,11 @@ export default async function ExplorePage({ searchParams }: Props) {
   // Fetch filter options
   const [{ data: groups }, { data: programs }, { data: batches }] = await Promise.all([
     supabase.from('academic_groups').select('id, name').order('name'),
-    searchParams.group
-      ? supabase.from('programs').select('id, name').eq('academic_group_id', searchParams.group).order('name')
+    filters.group
+      ? supabase.from('programs').select('id, name').eq('academic_group_id', filters.group).order('name')
       : Promise.resolve({ data: [] }),
-    searchParams.prog
-      ? supabase.from('batches').select('id, label, graduation_year').eq('program_id', searchParams.prog).order('graduation_year', { ascending: false })
+    filters.prog
+      ? supabase.from('batches').select('id, label, graduation_year').eq('program_id', filters.prog).order('graduation_year', { ascending: false })
       : Promise.resolve({ data: [] }),
   ])
 
@@ -109,22 +110,22 @@ export default async function ExplorePage({ searchParams }: Props) {
         <form className="flex flex-wrap gap-3 mb-8">
           <input
             name="q"
-            defaultValue={searchParams.q}
+            defaultValue={filters.q}
             placeholder="Search by name…"
             className="input flex-1 min-w-[200px] max-w-xs"
           />
-          <select name="group" defaultValue={searchParams.group} className="input w-auto">
+          <select name="group" defaultValue={filters.group} className="input w-auto">
             <option value="">All groups</option>
             {groups?.map(g => <option key={g.id} value={g.id}>{g.name}</option>)}
           </select>
           {programs && programs.length > 0 && (
-            <select name="prog" defaultValue={searchParams.prog} className="input w-auto">
+            <select name="prog" defaultValue={filters.prog} className="input w-auto">
               <option value="">All programs</option>
               {programs.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
             </select>
           )}
           {batches && batches.length > 0 && (
-            <select name="batch" defaultValue={searchParams.batch} className="input w-auto">
+            <select name="batch" defaultValue={filters.batch} className="input w-auto">
               <option value="">All batches</option>
               {batches.map(b => <option key={b.id} value={b.id}>{b.label ?? b.graduation_year}</option>)}
             </select>
@@ -179,7 +180,7 @@ export default async function ExplorePage({ searchParams }: Props) {
         <div className="flex justify-center gap-3 mt-8">
           {page > 0 && (
             <Link
-              href={`?${new URLSearchParams({ ...searchParams, page: String(page - 1) })}`}
+              href={`?${new URLSearchParams({ ...filters, page: String(page - 1) })}`}
               className="btn-secondary"
             >
               ← Prev
@@ -187,7 +188,7 @@ export default async function ExplorePage({ searchParams }: Props) {
           )}
           {(users?.length ?? 0) === PAGE_SIZE && (
             <Link
-              href={`?${new URLSearchParams({ ...searchParams, page: String(page + 1) })}`}
+              href={`?${new URLSearchParams({ ...filters, page: String(page + 1) })}`}
               className="btn-secondary"
             >
               Next →

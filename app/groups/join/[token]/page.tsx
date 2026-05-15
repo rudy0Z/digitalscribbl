@@ -3,7 +3,7 @@ import { requirePageUser } from '@/lib/auth/server'
 import { ROUTES } from '@/lib/constants'
 
 interface Props {
-  params: { token: string }
+  params: Promise<{ token: string }>
 }
 
 /**
@@ -12,12 +12,13 @@ interface Props {
  */
 export default async function JoinGroupPage({ params }: Props) {
   const { supabase, user } = await requirePageUser()
+  const { token } = await params
 
   // Look up the group
   const { data: group } = await supabase
     .from('friend_groups')
     .select('id, name')
-    .eq('invite_token', params.token)
+    .eq('invite_token', token)
     .single()
 
   if (!group) redirect('/groups?join_error=invalid')

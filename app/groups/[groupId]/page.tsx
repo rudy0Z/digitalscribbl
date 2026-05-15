@@ -10,16 +10,17 @@ import { ROUTES } from '@/lib/constants'
 export const dynamic = 'force-dynamic'
 
 interface Props {
-  params: { groupId: string }
+  params: Promise<{ groupId: string }>
 }
 
 export default async function GroupDetailPage({ params }: Props) {
   const { supabase, user } = await requirePageUser()
+  const { groupId } = await params
 
   const { data: group } = await supabase
     .from('friend_groups')
     .select('id, name, admin_id, invite_token, created_at')
-    .eq('id', params.groupId)
+    .eq('id', groupId)
     .single()
 
   if (!group) notFound()

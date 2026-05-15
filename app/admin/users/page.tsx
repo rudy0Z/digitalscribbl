@@ -6,18 +6,19 @@ import UserActions from './UserActions'
 export const dynamic = 'force-dynamic'
 
 interface Props {
-  searchParams: { q?: string; page?: string }
+  searchParams: Promise<{ q?: string; page?: string }>
 }
 
 const PAGE_SIZE = 30
 
 export default async function AdminUsersPage({ searchParams }: Props) {
   const { supabase, user } = await requirePageUser()
+  const filters = await searchParams
 
   const { data: me } = await supabase.from('users').select('is_admin').eq('id', user.id).single()
   if (!me?.is_admin) redirect('/dashboard')
 
-  const page = Math.max(0, Number(searchParams.page ?? 0))
+  const page = Math.max(0, Number(filters.page ?? 0))
 
   let query = supabase
     .from('users')
@@ -29,8 +30,8 @@ export default async function AdminUsersPage({ searchParams }: Props) {
     .order('created_at', { ascending: false })
     .range(page * PAGE_SIZE, (page + 1) * PAGE_SIZE - 1)
 
-  if (searchParams.q) {
-    query = query.or(`display_name.ilike.%${searchParams.q}%,email.ilike.%${searchParams.q}%,enrollment_number.ilike.%${searchParams.q}%`)
+  if (filters.q) {
+    query = query.or(`display_name.ilike.%${filters.q}%,email.ilike.%${filters.q}%,enrollment_number.ilike.%${filters.q}%`)
   }
 
   const { data: users } = await query
@@ -64,12 +65,12 @@ export default async function AdminUsersPage({ searchParams }: Props) {
         <form className="flex gap-3 mb-6">
           <input
             name="q"
-            defaultValue={searchParams.q}
+            defaultValue={filters.q}
             placeholder="Search by name, email, or enrollment number…"
             className="input flex-1"
           />
           <button type="submit" className="btn-primary">Search</button>
-          {searchParams.q && (
+          {filters.q && (
             <Link href="/admin/users" className="btn-secondary">Clear</Link>
           )}
         </form>
@@ -165,7 +166,7 @@ export default async function AdminUsersPage({ searchParams }: Props) {
         <div className="flex justify-center gap-3 mt-6">
           {page > 0 && (
             <Link
-              href={`?${new URLSearchParams({ ...(searchParams.q ? { q: searchParams.q } : {}), page: String(page - 1) })}`}
+              href={`?${new URLSearchParams({ ...(filters.q ? { q: filters.q } : {}), page: String(page - 1) })}`}
               className="btn-secondary"
             >
               ← Prev
@@ -173,7 +174,7 @@ export default async function AdminUsersPage({ searchParams }: Props) {
           )}
           {(users?.length ?? 0) === PAGE_SIZE && (
             <Link
-              href={`?${new URLSearchParams({ ...(searchParams.q ? { q: searchParams.q } : {}), page: String(page + 1) })}`}
+              href={`?${new URLSearchParams({ ...(filters.q ? { q: filters.q } : {}), page: String(page + 1) })}`}
               className="btn-secondary"
             >
               Next →

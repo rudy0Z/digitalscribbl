@@ -13,6 +13,30 @@ test('sanitizeScribbleSvg accepts basic fabric svg markup', () => {
   assert.match(result.svg, /<path/)
 })
 
+test('sanitizeScribbleSvg accepts svg with xml declaration', () => {
+  const svg = '<?xml version="1.0" encoding="UTF-8"?><svg width="100" height="50" viewBox="0 0 100 50"><rect width="10" height="10"/></svg>'
+
+  const result = sanitizeScribbleSvg(svg)
+
+  assert.equal(result.ok, true)
+  assert.match(result.svg, /^<svg/i)
+})
+
+test('sanitizeScribbleSvg accepts fabric svg with doctype and generator comment', () => {
+  const svg = [
+    '<?xml version="1.0" encoding="UTF-8" standalone="no" ?>',
+    '<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN"',
+    '  "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">',
+    '<!-- Created with Fabric.js 7.3.1 -->',
+    '<svg width="100" height="50" viewBox="0 0 100 50"><path d="M0 0 L10 10"/></svg>',
+  ].join('\n')
+
+  const result = sanitizeScribbleSvg(svg)
+
+  assert.equal(result.ok, true)
+  assert.match(result.svg, /^<svg/i)
+})
+
 test('sanitizeScribbleSvg rejects active svg content', () => {
   const svg = '<svg width="100" height="50" onload="alert(1)"><script>alert(1)</script><path d="M0 0 L10 10"/></svg>'
 

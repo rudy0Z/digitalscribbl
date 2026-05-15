@@ -97,13 +97,16 @@ const DrawingCanvas = forwardRef<DrawingCanvasRef, DrawingCanvasProps>(function 
 
   // ── Fabric.js init (runs once on mount) ───────────────────
   useEffect(() => {
-    let canvas: import('fabric').Canvas
+    let canvas: import('fabric').Canvas | null = null
+    let disposed = false
 
     import('fabric').then(mod => {
-      if (!domRef.current) return
+      if (!domRef.current || disposed) return
       fabricMod.current = mod
+      domRef.current.removeAttribute('data-fabric')
+      domRef.current.classList.remove('lower-canvas')
 
-      canvas = new mod.Canvas(domRef.current, {
+      const liveCanvas = new mod.Canvas(domRef.current, {
         width:               w,
         height:              h,
         backgroundColor:     undefined,   // transparent
@@ -111,34 +114,36 @@ const DrawingCanvas = forwardRef<DrawingCanvasRef, DrawingCanvasProps>(function 
         isDrawingMode:       false,
         enableRetinaScaling: false,
       })
+      canvas = liveCanvas
 
-      canvas.freeDrawingBrush = new mod.PencilBrush(canvas)
-      fabricRef.current       = canvas
+      liveCanvas.freeDrawingBrush = new mod.PencilBrush(liveCanvas)
+      fabricRef.current           = liveCanvas
 
       // Freehand stroke finished → apply opacity, snapshot, broadcast
-      canvas.on('path:created', ({ path }) => {
+      liveCanvas.on('path:created', ({ path }) => {
         path.set('opacity', opacityRef.current)
-        canvas.renderAll()
+        liveCanvas.renderAll()
         snapshot()
-        onStrokeRef.current(canvas.toJSON())
+        onStrokeRef.current(liveCanvas.toJSON())
       })
 
       // Text edit exited
-      canvas.on('text:editing:exited', () => {
+      liveCanvas.on('text:editing:exited', () => {
         snapshot()
-        onStrokeRef.current(canvas.toJSON())
+        onStrokeRef.current(liveCanvas.toJSON())
       })
 
       // Object moved / resized in select mode
-      canvas.on('object:modified', () => {
+      liveCanvas.on('object:modified', () => {
         snapshot()
-        onStrokeRef.current(canvas.toJSON())
+        onStrokeRef.current(liveCanvas.toJSON())
       })
 
       // Remote strokes (collaborative — same box, future use)
       if (onRemoteStroke) {
         onRemoteStroke(({ fabricJson }) => {
-          canvas.loadFromJSON(fabricJson, () => canvas.renderAll())
+          if (disposed) return
+          liveCanvas.loadFromJSON(fabricJson, () => liveCanvas.renderAll())
         })
       }
 
@@ -146,8 +151,11 @@ const DrawingCanvas = forwardRef<DrawingCanvasRef, DrawingCanvasProps>(function 
     })
 
     return () => {
+      disposed = true
       try { canvas?.dispose() } catch { /* ignore */ }
+      canvas = null
       fabricRef.current = null
+      fabricMod.current = null
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])

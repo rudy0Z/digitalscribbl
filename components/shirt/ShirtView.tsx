@@ -392,6 +392,7 @@ export default function ShirtView({
               }}
             >
               <DrawingCanvas
+                key={`${shirt.id}-${panel}-${plantedBox.x}-${plantedBox.y}-${plantedBox.w}-${plantedBox.h}`}
                 ref={drawingRef}
                 w={plantedBox.w}
                 h={plantedBox.h}

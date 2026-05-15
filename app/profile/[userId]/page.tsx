@@ -9,18 +9,19 @@ import { ROUTES } from '@/lib/constants'
 import type { Panel } from '@/lib/supabase/types'
 
 interface Props {
-  params: { userId: string }
-  searchParams: { panel?: string; shirt?: string }
+  params: Promise<{ userId: string }>
+  searchParams: Promise<{ panel?: string; shirt?: string }>
 }
 
 export const dynamic = 'force-dynamic'
 
 export default async function ProfilePage({ params, searchParams }: Props) {
   const { supabase, user: currentUser } = await requirePageUser()
+  const { userId: targetId } = await params
+  const resolvedSearchParams = await searchParams
 
-  const targetId = params.userId
-  const panel    = (searchParams.panel ?? 'front') as Panel
-  const shirtNum = Number(searchParams.shirt ?? 1)
+  const panel    = (resolvedSearchParams.panel ?? 'front') as Panel
+  const shirtNum = Number(resolvedSearchParams.shirt ?? 1)
 
   // Fetch target user
   const { data: target } = await supabase

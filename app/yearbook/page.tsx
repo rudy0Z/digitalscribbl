@@ -8,11 +8,12 @@ import YearbookControls from './YearbookControls'
 export const dynamic = 'force-dynamic'
 
 interface Props {
-  searchParams: { batch?: string; group?: string }
+  searchParams: Promise<{ batch?: string; group?: string }>
 }
 
 export default async function YearbookPage({ searchParams }: Props) {
   const { supabase, user } = await requirePageUser()
+  const filters = await searchParams
 
   // Fetch viewer's batch for default filter
   const { data: me } = await supabase
@@ -22,7 +23,7 @@ export default async function YearbookPage({ searchParams }: Props) {
     .single()
 
   const defaultBatchId  = me?.batch_id ?? ''
-  const activeBatchId   = searchParams.batch ?? defaultBatchId
+  const activeBatchId   = filters.batch ?? defaultBatchId
 
   // Fetch all batches for the filter dropdown
   const { data: batches } = await supabase
