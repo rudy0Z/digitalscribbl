@@ -1,5 +1,6 @@
 import { redirect } from 'next/navigation'
 import Link from 'next/link'
+import { Search } from 'lucide-react'
 import { requirePageUser } from '@/lib/auth/server'
 import AvatarDisplay from '@/components/avatar/AvatarDisplay'
 import NotificationBell from '@/components/notifications/NotificationBell'
@@ -103,15 +104,24 @@ export default async function ExplorePage({ searchParams }: Props) {
         </div>
       </nav>
 
-      <main className="max-w-4xl mx-auto px-4 py-8">
-        <h1 className="text-2xl font-display font-bold text-ink-900 mb-6">Explore</h1>
+      <main className="mx-auto max-w-6xl px-4 py-6 sm:py-8">
+        <div className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+          <div>
+            <p className="text-xs font-semibold uppercase tracking-[0.18em] text-gray-400">Explore shirts</p>
+            <h1 className="mt-1 font-display text-3xl font-bold text-ink-900">Find someone to sign</h1>
+            <p className="mt-2 text-sm text-gray-500">The fastest way to test the full journey is to jump between real profiles and leave visible marks.</p>
+          </div>
+          <Link href={ROUTES.dashboard} className="btn-secondary text-xs">
+            Back to lobby
+          </Link>
+        </div>
 
         {/* Filters */}
-        <form className="flex flex-wrap gap-3 mb-8">
+        <form className="mb-8 flex flex-wrap gap-3 rounded-2xl border border-black/10 bg-white p-3 shadow-sm">
           <input
             name="q"
             defaultValue={filters.q}
-            placeholder="Search by name…"
+            placeholder="Search by name..."
             className="input flex-1 min-w-[200px] max-w-xs"
           />
           <select name="group" defaultValue={filters.group} className="input w-auto">
@@ -130,17 +140,20 @@ export default async function ExplorePage({ searchParams }: Props) {
               {batches.map(b => <option key={b.id} value={b.id}>{b.label ?? b.graduation_year}</option>)}
             </select>
           )}
-          <button type="submit" className="btn-primary">Search</button>
+          <button type="submit" className="btn-primary inline-flex items-center gap-2">
+            <Search size={15} />
+            Search
+          </button>
         </form>
 
-        {/* Avatar grid */}
+        {/* Shirt grid */}
         {(users?.length ?? 0) === 0 ? (
-          <div className="text-center py-16 text-gray-400">
-            <p className="text-4xl mb-3">🔍</p>
+          <div className="rounded-[28px] border border-dashed border-gray-200 bg-white py-16 text-center text-gray-400">
+            <Search size={34} className="mx-auto mb-3" />
             <p className="text-sm">No one found matching those filters.</p>
           </div>
         ) : (
-          <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-6 gap-4">
+          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
             {users!.map(u => {
               const isOnline = u.last_seen && new Date(u.last_seen) > new Date(cutoff)
               const batch    = u.batches as unknown as { label: string | null; graduation_year: number; programs: { name: string } } | null
@@ -149,25 +162,37 @@ export default async function ExplorePage({ searchParams }: Props) {
                 <Link
                   key={u.id}
                   href={ROUTES.profile(u.id)}
-                  className="group flex flex-col items-center gap-2 p-3 rounded-2xl hover:bg-white hover:shadow-sm transition"
+                  className="group overflow-hidden rounded-[24px] border border-black/10 bg-white transition hover:-translate-y-0.5 hover:shadow-sm"
                 >
-                  <div className="relative">
-                    <AvatarDisplay
-                      bodyStyle={u.body_style}
-                      shirtColor={u.shirt_color}
-                      headFrontUrl={u.head_front_url}
-                      scribbleCount={scribbleCountMap[u.id] ?? 0}
-                      size="sm"
-                      className="group-hover:scale-105 transition-transform"
-                    />
-                    {isOnline && (
-                      <div className="absolute -bottom-0.5 -right-0.5 w-3 h-3 bg-green-400 rounded-full border-2 border-white" />
-                    )}
+                  <div className="flex items-center justify-center bg-[#f8f5ee] p-4">
+                    <div className="relative">
+                      <AvatarDisplay
+                        bodyStyle={u.body_style}
+                        shirtColor={u.shirt_color}
+                        headFrontUrl={u.head_front_url}
+                        scribbleCount={scribbleCountMap[u.id] ?? 0}
+                        size="md"
+                        className="transition-transform group-hover:scale-[1.03]"
+                      />
+                      {isOnline && (
+                        <div className="absolute bottom-2 right-2 h-3.5 w-3.5 rounded-full border-2 border-white bg-green-400" />
+                      )}
+                    </div>
                   </div>
-                  <div className="text-center">
-                    <p className="text-xs font-semibold text-ink-900 truncate w-full">{u.display_name.split(' ')[0]}</p>
+                  <div className="p-4">
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="min-w-0">
+                        <p className="truncate text-sm font-semibold text-ink-900">{u.display_name}</p>
+                        {batch && (
+                          <p className="mt-1 truncate text-xs text-gray-500">{batch.programs.name} · {batch.label ?? batch.graduation_year}</p>
+                        )}
+                      </div>
+                      <span className="rounded-full bg-ink-900 px-2 py-1 text-[10px] font-semibold text-white">
+                        Sign
+                      </span>
+                    </div>
                     {batch && (
-                      <p className="text-[10px] text-gray-400 truncate">{batch.label ?? batch.graduation_year}</p>
+                      <p className="mt-3 text-xs text-gray-400">{scribbleCountMap[u.id] ?? 0} scribbles received</p>
                     )}
                   </div>
                 </Link>

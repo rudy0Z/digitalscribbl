@@ -2,6 +2,7 @@
 
 import { useState, useRef, useCallback, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
+import { Check, Flag, PenLine, Trash2, Users, Wifi, WifiOff, X } from 'lucide-react'
 import { useShirtChannel } from '@/lib/hooks/useShirtChannel'
 import GhostBoxCanvas from '@/components/scribble/GhostBoxCanvas'
 import DrawingCanvas, { type DrawingCanvasRef, type DrawingTool } from '@/components/scribble/DrawingCanvas'
@@ -32,6 +33,11 @@ interface ShirtViewProps {
   currentUserName:   string | null
   canScribble:       boolean
   isOwner:           boolean
+  bodyStyle?:         string
+  shirtColor?:        string
+  headFrontUrl?:      string | null
+  headBackUrl?:       string | null
+  yearbookQuote?:     string | null
   textureUrl?:       string
   onScribblePlaced?: () => void
 }
@@ -48,6 +54,11 @@ export default function ShirtView({
   currentUserName,
   canScribble,
   isOwner,
+  bodyStyle = 'M1',
+  shirtColor = '#F8F8F8',
+  headFrontUrl,
+  headBackUrl,
+  yearbookQuote,
   textureUrl,
   onScribblePlaced,
 }: ShirtViewProps) {
@@ -235,223 +246,306 @@ export default function ShirtView({
 
   // Filter out optimistically-removed scribbles
   const displayedScribbles = existingScribbles.filter(s => !removedIds.has(s.id))
+  const panelOccupancy: Record<Panel, number> = {
+    front:   Number(shirt.front_occupancy ?? 0),
+    back:    Number(shirt.back_occupancy ?? 0),
+    sleeves: Number(shirt.sleeves_occupancy ?? 0),
+  }
+  const panelTitle: Record<Panel, string> = {
+    front:   'Front shirt',
+    back:    'Back shirt',
+    sleeves: 'Sleeve canvas',
+  }
+  const panelNote: Record<Panel, string> = {
+    front:   'For names, tiny sketches, and face-first memories.',
+    back:    'Best for longer notes and bigger farewell drawings.',
+    sleeves: 'Small marks, initials, icons, and inside jokes.',
+  }
+  const headUrl = panel === 'back' ? (headBackUrl ?? headFrontUrl) : headFrontUrl
+  const darkShirt = /^#(?:[0-3][0-9a-f]|4[0-9a-f])/i.test(shirtColor)
+  const shoulderScale = bodyStyle.startsWith('M') ? 1 : 0.94
 
   // ── Render ────────────────────────────────────────────────
   return (
-    <div className="flex flex-col md:flex-row gap-4 items-start">
-      {/* Shirt canvas area */}
-      <div className="flex-1 relative">
-        {/* Live presence indicator */}
-        <div className="flex items-center gap-2 mb-2 text-xs text-gray-500">
-          <span className={cn(
-            'inline-block w-2 h-2 rounded-full',
-            isConnected ? 'bg-green-400' : 'bg-gray-300'
-          )} />
-          {viewerCount > 0 ? `${viewerCount} people viewing this shirt` : 'Just you here'}
-          {ghostBoxes.size > 0 && (
-            <span className="text-scribble-purple font-medium">
-              · {ghostBoxes.size} scribbling now
+    <div className="space-y-4">
+      <section className="overflow-hidden rounded-[28px] border border-black/10 bg-[#f8f5ee] shadow-[0_24px_70px_rgba(45,35,22,0.08)]">
+        <div className="flex flex-col gap-3 border-b border-black/10 bg-white/55 px-4 py-3 backdrop-blur sm:flex-row sm:items-center sm:justify-between sm:px-5">
+          <div>
+            <div className="flex flex-wrap items-center gap-2">
+              <h2 className="font-display text-xl font-bold text-ink-900">{panelTitle[panel]}</h2>
+              <span className="rounded-full bg-ink-900 px-2.5 py-1 text-[11px] font-semibold text-white">
+                {Math.round(panelOccupancy[panel])}% filled
+              </span>
+            </div>
+            <p className="mt-1 text-xs text-gray-500">{panelNote[panel]}</p>
+          </div>
+
+          <div className="flex flex-wrap items-center gap-2 text-xs text-gray-500">
+            <span className="inline-flex items-center gap-1.5 rounded-full border border-black/10 bg-white/70 px-2.5 py-1">
+              {isConnected ? <Wifi size={13} className="text-green-500" /> : <WifiOff size={13} className="text-gray-400" />}
+              {viewerCount > 0 ? `${viewerCount} live` : 'solo'}
             </span>
-          )}
+            {ghostBoxes.size > 0 && (
+              <span className="inline-flex items-center gap-1.5 rounded-full border border-indigo-200 bg-indigo-50 px-2.5 py-1 font-medium text-indigo-700">
+                <Users size={13} />
+                {ghostBoxes.size} writing
+              </span>
+            )}
+          </div>
         </div>
 
-        {mode === 'browse' && (
-          <div className="relative w-full" style={{ aspectRatio: `${SHIRT_W}/${SHIRT_H}` }}>
-            {/* Base shirt area */}
-            {displayedScribbles.length === 0 && (
-              <div className="absolute inset-0 bg-gray-50 rounded-lg flex items-center justify-center">
-                <p className="text-sm text-gray-400">No scribbles yet — be the first!</p>
-              </div>
-            )}
+        <div className="p-3 sm:p-5">
+          <div className="relative mx-auto aspect-[4/5] w-full max-w-[610px] overflow-hidden rounded-[26px] border border-black/10 bg-[#ece5d9]">
+            <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_18%,rgba(255,255,255,0.85),rgba(255,255,255,0)_30%),linear-gradient(180deg,rgba(255,255,255,0.45),rgba(255,255,255,0))]" />
 
-            {/* SVG scribble overlays — each scribble rendered at its bounding box */}
-            {displayedScribbles.filter(s => s.canvas_svg).map(s => (
-              <img
-                key={s.id}
-                src={`data:image/svg+xml;charset=utf-8,${encodeURIComponent(s.canvas_svg!)}`}
-                alt=""
-                draggable={false}
-                style={{
-                  position: 'absolute',
-                  left:   `${(s.x / SHIRT_W) * 100}%`,
-                  top:    `${(s.y / SHIRT_H) * 100}%`,
-                  width:  `${(s.w / SHIRT_W) * 100}%`,
-                  height: `${(s.h / SHIRT_H) * 100}%`,
-                  pointerEvents: 'none',
-                  userSelect: 'none',
-                }}
-              />
-            ))}
-
-            {/* Other users' ghost boxes */}
-            {ghostBoxes.size > 0 && (
-              <svg className="absolute inset-0 w-full h-full pointer-events-none" viewBox={`0 0 ${SHIRT_W} ${SHIRT_H}`}>
-                {[...ghostBoxes.values()].filter(g => g.panel === panel).map(g => (
-                  <g key={g.userId}>
-                    <rect
-                      x={g.x} y={g.y} width={g.w} height={g.h}
-                      fill={g.isPlanted ? 'rgba(80,80,200,0.1)' : 'rgba(150,150,255,0.08)'}
-                      stroke={g.isPlanted ? 'rgba(80,80,200,0.7)' : 'rgba(150,150,255,0.5)'}
-                      strokeWidth="1.5"
-                      strokeDasharray={g.isPlanted ? undefined : '4 4'}
-                      className="transition-all duration-75"
-                      style={{ transform: 'translateZ(0)' }}
-                    />
-                    <text x={g.x + 4} y={g.y + 14} fontSize="10" fill="rgba(60,60,180,0.9)" fontWeight="bold">
-                      {g.displayName}
-                    </text>
-                  </g>
-                ))}
-              </svg>
-            )}
-
-            {/* ── Scribble interaction overlays ── */}
-            {/* Owner: remove button; Others: report button */}
-            {displayedScribbles.length > 0 && (isOwner || canScribble) && (
-              <svg
-                className="absolute inset-0 w-full h-full"
-                viewBox={`0 0 ${SHIRT_W} ${SHIRT_H}`}
-                style={{ pointerEvents: 'auto' }}
-              >
-                {displayedScribbles.map(s => {
-                  const isHovered   = hoveredId === s.id
-                  const isReported  = reportedIds.has(s.id)
-                  const btnColor    = isOwner ? 'rgba(220,38,38,0.88)' : 'rgba(245,158,11,0.88)'
-                  const btnLabel    = isOwner ? '×' : (isReported ? '✓' : '🚩')
-
-                  return (
-                    <g
-                      key={s.id}
-                      onMouseEnter={() => setHoveredId(s.id)}
-                      onMouseLeave={() => setHoveredId(null)}
-                      style={{ cursor: isHovered ? 'pointer' : 'default' }}
-                    >
-                      {/* Hit area + hover highlight */}
-                      <rect
-                        x={s.x} y={s.y} width={s.w} height={s.h}
-                        fill={isHovered ? 'rgba(0,0,0,0.06)' : 'transparent'}
-                        stroke={isHovered ? 'rgba(0,0,0,0.18)' : 'transparent'}
-                        strokeWidth="1"
-                        rx="2"
-                        style={{ pointerEvents: 'all' }}
-                      />
-                      {/* Action button — visible on hover */}
-                      {isHovered && (
-                        <g
-                          onClick={() => {
-                            if (isOwner) handleRemoveScribble(s.id)
-                            else         handleReportScribble(s.id)
-                          }}
-                          style={{ cursor: 'pointer' }}
-                        >
-                          <rect
-                            x={s.x + s.w - 18} y={s.y + 2}
-                            width={16} height={16}
-                            rx={3}
-                            fill={isReported && !isOwner ? 'rgba(34,197,94,0.88)' : btnColor}
-                          />
-                          <text
-                            x={s.x + s.w - 10} y={s.y + 13}
-                            fontSize={isOwner ? 14 : 10}
-                            textAnchor="middle"
-                            fill="white"
-                            fontWeight="bold"
-                            style={{ pointerEvents: 'none', userSelect: 'none' }}
-                          >
-                            {btnLabel}
-                          </text>
-                        </g>
-                      )}
-                    </g>
-                  )
-                })}
-              </svg>
-            )}
-          </div>
-        )}
-
-        {mode === 'placement' && (
-          <GhostBoxCanvas
-            panel={panel}
-            existingScribbles={existingScribbles}
-            liveGhostBoxes={ghostBoxes}
-            textureUrl={textureUrl}
-            textureVersion={textureVersion}
-            onPlant={handlePlant}
-            onCancel={handleCancel}
-            onBoxMoved={broadcastBoxMoved}
-          />
-        )}
-
-        {mode === 'drawing' && plantedBox && (
-          <div className="relative w-full" style={{ aspectRatio: `${SHIRT_W}/${SHIRT_H}` }}>
-            {/* Background: existing scribbles as SVG overlays (context for the drafter) */}
-            {existingScribbles.filter(s => s.canvas_svg).map(s => (
-              <img
-                key={s.id}
-                src={`data:image/svg+xml;charset=utf-8,${encodeURIComponent(s.canvas_svg!)}`}
-                alt=""
-                draggable={false}
-                style={{
-                  position: 'absolute',
-                  left:   `${(s.x / SHIRT_W) * 100}%`,
-                  top:    `${(s.y / SHIRT_H) * 100}%`,
-                  width:  `${(s.w / SHIRT_W) * 100}%`,
-                  height: `${(s.h / SHIRT_H) * 100}%`,
-                  pointerEvents: 'none',
-                }}
-              />
-            ))}
-            {/* Drawing canvas positioned over planted box */}
             <div
-              className="absolute border-2 border-ink-900 rounded shadow-lg bg-white/5 animate-box-plant"
+              className="absolute left-1/2 top-[3%] z-10 rounded-full border-4 border-[#f8f5ee] bg-[#dfe3ec] shadow-sm"
               style={{
-                left:   `${(plantedBox.x / SHIRT_W) * 100}%`,
-                top:    `${(plantedBox.y / SHIRT_H) * 100}%`,
-                width:  `${(plantedBox.w / SHIRT_W) * 100}%`,
-                height: `${(plantedBox.h / SHIRT_H) * 100}%`,
+                width: '18%',
+                aspectRatio: '1 / 1',
+                transform: 'translateX(-50%)',
+                backgroundImage: headUrl ? `url("${headUrl}")` : undefined,
+                backgroundPosition: 'center',
+                backgroundSize: 'cover',
+                opacity: panel === 'back' ? 0.72 : 1,
+              }}
+            />
+
+            <div
+              className="absolute left-1/2 top-[18%] rounded-[999px] border border-black/5"
+              style={{
+                width: `${86 * shoulderScale}%`,
+                height: '13%',
+                transform: 'translateX(-50%)',
+                background: shirtColor,
+                boxShadow: 'inset 0 -18px 30px rgba(0,0,0,0.05)',
+              }}
+            />
+            <div
+              className="absolute left-[5%] top-[24%] rounded-[999px] border border-black/5"
+              style={{
+                width: `${22 * shoulderScale}%`,
+                height: '11%',
+                background: shirtColor,
+                transform: 'rotate(-8deg)',
+              }}
+            />
+            <div
+              className="absolute right-[5%] top-[24%] rounded-[999px] border border-black/5"
+              style={{
+                width: `${22 * shoulderScale}%`,
+                height: '11%',
+                background: shirtColor,
+                transform: 'rotate(8deg)',
+              }}
+            />
+
+            <div
+              className={cn(
+                'absolute left-[20%] top-[24%] z-20 h-[72%] w-[60%] overflow-hidden border bg-white',
+                darkShirt ? 'border-white/25' : 'border-black/10'
+              )}
+              style={{
+                borderRadius: '18px 18px 54px 54px',
+                background: shirtColor,
+                boxShadow: 'inset 0 0 0 1px rgba(255,255,255,0.24), inset 0 -26px 44px rgba(0,0,0,0.06)',
               }}
             >
-              <DrawingCanvas
-                key={`${shirt.id}-${panel}-${plantedBox.x}-${plantedBox.y}-${plantedBox.w}-${plantedBox.h}`}
-                ref={drawingRef}
-                w={plantedBox.w}
-                h={plantedBox.h}
-                tool={tool}
-                color={color}
-                brushSize={brushSize}
-                opacity={opacity}
-                fillShapes={fillShapes}
-                fontSize={fontSize}
-                fontStyle={fontStyle}
-                onStroke={handleLocalStroke}
-                onRemoteStroke={handleStrokeHandlerRequest}
-              />
+              <div className={cn('absolute left-1/2 top-0 z-30 h-[13%] w-[32%] -translate-x-1/2 rounded-b-full border-x border-b', darkShirt ? 'border-white/25 bg-black/15' : 'border-black/10 bg-white/45')} />
+              <div className="absolute inset-0 z-10">
+                {mode === 'browse' && (
+                  <>
+                    {displayedScribbles.length === 0 && (
+                      <div className={cn('absolute inset-4 flex items-center justify-center rounded-2xl border border-dashed text-center', darkShirt ? 'border-white/20 text-white/55' : 'border-black/15 text-black/40')}>
+                        <p className="max-w-[180px] text-xs font-medium">
+                          Empty space. Claim a spot and make this shirt feel lived in.
+                        </p>
+                      </div>
+                    )}
+
+                    {displayedScribbles.filter(s => s.canvas_svg).map(s => (
+                      <div
+                        key={s.id}
+                        aria-hidden
+                        className="absolute bg-contain bg-center bg-no-repeat"
+                        style={{
+                          left:   `${(s.x / SHIRT_W) * 100}%`,
+                          top:    `${(s.y / SHIRT_H) * 100}%`,
+                          width:  `${(s.w / SHIRT_W) * 100}%`,
+                          height: `${(s.h / SHIRT_H) * 100}%`,
+                          backgroundImage: `url("data:image/svg+xml;charset=utf-8,${encodeURIComponent(s.canvas_svg!)}")`,
+                          pointerEvents: 'none',
+                        }}
+                      />
+                    ))}
+
+                    {ghostBoxes.size > 0 && (
+                      <svg className="absolute inset-0 h-full w-full pointer-events-none" viewBox={`0 0 ${SHIRT_W} ${SHIRT_H}`}>
+                        {[...ghostBoxes.values()].filter(g => g.panel === panel).map(g => (
+                          <g key={g.userId}>
+                            <rect
+                              x={g.x} y={g.y} width={g.w} height={g.h}
+                              fill={g.isPlanted ? 'rgba(80,80,200,0.12)' : 'rgba(150,150,255,0.09)'}
+                              stroke={g.isPlanted ? 'rgba(80,80,200,0.72)' : 'rgba(150,150,255,0.55)'}
+                              strokeWidth="2"
+                              strokeDasharray={g.isPlanted ? undefined : '5 5'}
+                            />
+                            <text x={g.x + 6} y={g.y + 16} fontSize="11" fill="rgba(50,50,150,0.95)" fontWeight="700">
+                              {g.displayName}
+                            </text>
+                          </g>
+                        ))}
+                      </svg>
+                    )}
+
+                    {displayedScribbles.length > 0 && (isOwner || canScribble) && (
+                      <>
+                        {displayedScribbles.map(s => {
+                          const isHovered = hoveredId === s.id
+                          const isReported = reportedIds.has(s.id)
+
+                          return (
+                            <button
+                              key={s.id}
+                              type="button"
+                              aria-label={isOwner ? 'Remove scribble' : 'Report scribble'}
+                              className={cn(
+                                'absolute rounded-sm border transition',
+                                isHovered ? 'border-black/25 bg-black/5' : 'border-transparent bg-transparent'
+                              )}
+                              style={{
+                                left:   `${(s.x / SHIRT_W) * 100}%`,
+                                top:    `${(s.y / SHIRT_H) * 100}%`,
+                                width:  `${(s.w / SHIRT_W) * 100}%`,
+                                height: `${(s.h / SHIRT_H) * 100}%`,
+                              }}
+                              onPointerEnter={() => setHoveredId(s.id)}
+                              onPointerLeave={() => setHoveredId(null)}
+                              onClick={() => {
+                                if (isOwner) handleRemoveScribble(s.id)
+                                else handleReportScribble(s.id)
+                              }}
+                            >
+                              <span className={cn(
+                                'absolute right-1 top-1 inline-flex h-6 w-6 items-center justify-center rounded-full text-white shadow-sm transition',
+                                isOwner ? 'bg-red-600' : isReported ? 'bg-green-600' : 'bg-amber-500',
+                                isHovered ? 'opacity-100' : 'opacity-75'
+                              )}>
+                                {isOwner ? <Trash2 size={13} /> : isReported ? <Check size={13} /> : <Flag size={13} />}
+                              </span>
+                            </button>
+                          )
+                        })}
+                      </>
+                    )}
+                  </>
+                )}
+
+                {mode === 'placement' && (
+                  <GhostBoxCanvas
+                    panel={panel}
+                    existingScribbles={existingScribbles}
+                    liveGhostBoxes={ghostBoxes}
+                    textureUrl={textureUrl}
+                    textureVersion={textureVersion}
+                    onPlant={handlePlant}
+                    onCancel={handleCancel}
+                    onBoxMoved={broadcastBoxMoved}
+                  />
+                )}
+
+                {mode === 'drawing' && plantedBox && (
+                  <div className="relative h-full w-full">
+                    {existingScribbles.filter(s => s.canvas_svg).map(s => (
+                      <div
+                        key={s.id}
+                        aria-hidden
+                        className="absolute bg-contain bg-center bg-no-repeat"
+                        style={{
+                          left:   `${(s.x / SHIRT_W) * 100}%`,
+                          top:    `${(s.y / SHIRT_H) * 100}%`,
+                          width:  `${(s.w / SHIRT_W) * 100}%`,
+                          height: `${(s.h / SHIRT_H) * 100}%`,
+                          backgroundImage: `url("data:image/svg+xml;charset=utf-8,${encodeURIComponent(s.canvas_svg!)}")`,
+                          pointerEvents: 'none',
+                        }}
+                      />
+                    ))}
+                    <div
+                      className="absolute overflow-hidden rounded-md border-2 border-ink-900 bg-white/5 shadow-lg animate-box-plant"
+                      style={{
+                        left:   `${(plantedBox.x / SHIRT_W) * 100}%`,
+                        top:    `${(plantedBox.y / SHIRT_H) * 100}%`,
+                        width:  `${(plantedBox.w / SHIRT_W) * 100}%`,
+                        height: `${(plantedBox.h / SHIRT_H) * 100}%`,
+                      }}
+                    >
+                      <DrawingCanvas
+                        key={`${shirt.id}-${panel}-${plantedBox.x}-${plantedBox.y}-${plantedBox.w}-${plantedBox.h}`}
+                        ref={drawingRef}
+                        w={plantedBox.w}
+                        h={plantedBox.h}
+                        tool={tool}
+                        color={color}
+                        brushSize={brushSize}
+                        opacity={opacity}
+                        fillShapes={fillShapes}
+                        fontSize={fontSize}
+                        fontStyle={fontStyle}
+                        onStroke={handleLocalStroke}
+                        onRemoteStroke={handleStrokeHandlerRequest}
+                      />
+                    </div>
+                  </div>
+                )}
+              </div>
             </div>
+
+            {yearbookQuote && (
+              <div className="absolute bottom-4 left-4 right-4 rounded-2xl border border-black/10 bg-white/72 px-3 py-2 text-center text-xs italic text-gray-600 backdrop-blur">
+                &ldquo;{yearbookQuote}&rdquo;
+              </div>
+            )}
           </div>
-        )}
+        </div>
 
-        {error && (
-          <p className="mt-2 text-sm text-red-500">{error}</p>
-        )}
-        {removeError && (
-          <p className="mt-2 text-sm text-red-500">{removeError}</p>
-        )}
+        <div className="flex flex-col gap-3 border-t border-black/10 bg-white/45 px-4 py-3 sm:flex-row sm:items-center sm:justify-between sm:px-5">
+          <div className="min-h-[20px] text-sm">
+            {error && <p className="text-red-600">{error}</p>}
+            {removeError && <p className="text-red-600">{removeError}</p>}
+            {!error && !removeError && mode === 'browse' && (
+              <p className="text-xs text-gray-500">
+                {isOwner
+                  ? 'Tap a saved scribble to remove it from your shirt.'
+                  : canScribble
+                    ? `Choose a spot, draw, then save it to ${ownerName}'s shirt.`
+                    : `${ownerName}'s shirt is view-only for your account right now.`}
+              </p>
+            )}
+          </div>
 
-        {/* Owner hint when scribbles are present */}
-        {mode === 'browse' && isOwner && displayedScribbles.length > 0 && (
-          <p className="mt-1.5 text-[10px] text-gray-400 text-center">
-            Hover over a scribble and click <strong>×</strong> to remove it
-          </p>
-        )}
-        {mode === 'browse' && !isOwner && canScribble && displayedScribbles.length > 0 && (
-          <p className="mt-1.5 text-[10px] text-gray-400 text-center">
-            Hover over a scribble and click <strong>🚩</strong> to report it
-          </p>
-        )}
-      </div>
+          {mode === 'browse' && !isOwner && canScribble && (
+            <button
+              onClick={enterPlacementMode}
+              className="inline-flex items-center justify-center gap-2 rounded-xl bg-ink-900 px-4 py-2 text-sm font-medium text-white shadow-sm transition hover:bg-ink-700"
+            >
+              <PenLine size={16} />
+              Scribble on this shirt
+            </button>
+          )}
 
-      {/* Toolbar (only in drawing mode) */}
+          {mode === 'placement' && (
+            <button
+              onClick={handleCancel}
+              className="inline-flex items-center justify-center gap-2 rounded-xl border border-gray-200 bg-white px-4 py-2 text-sm font-medium text-ink-900 transition hover:bg-gray-50"
+            >
+              <X size={16} />
+              Cancel
+            </button>
+          )}
+        </div>
+      </section>
+
       {mode === 'drawing' && (
         <ScribbleToolbar
           tool={tool}
@@ -474,18 +568,6 @@ export default function ShirtView({
           isPlacing={isPlacing}
           canPlace={hasDrawing}
         />
-      )}
-
-      {/* Scribble CTA (browse mode only, not owner) */}
-      {mode === 'browse' && !isOwner && canScribble && (
-        <div className="flex flex-col items-start gap-2 pt-8">
-          <button
-            onClick={enterPlacementMode}
-            className="px-4 py-2 bg-ink-900 hover:bg-ink-700 text-white rounded-xl font-medium text-sm transition shadow-sm"
-          >
-            ✏️ Scribble on this shirt
-          </button>
-        </div>
       )}
     </div>
   )

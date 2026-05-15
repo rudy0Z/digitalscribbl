@@ -5,7 +5,9 @@ import AvatarDisplay from '@/components/avatar/AvatarDisplay'
 import NotificationBell from '@/components/notifications/NotificationBell'
 import ShirtView from '@/components/shirt/ShirtView'
 import RequestScribbleButton from './RequestScribbleButton'
+import ShareButton from '@/app/dashboard/ShareButton'
 import { ROUTES } from '@/lib/constants'
+import { getPublicSiteUrl } from '@/lib/utils/siteUrl'
 import type { Panel } from '@/lib/supabase/types'
 
 interface Props {
@@ -105,6 +107,14 @@ export default async function ProfilePage({ params, searchParams }: Props) {
   const textureUrl = activeShirt ? (activeShirt as Record<string, unknown>)[textureKey[panel]] as string | undefined : undefined
 
   const batch = target.batches as unknown as { label: string | null; graduation_year: number; programs: { name: string; academic_groups: { name: string } } } | null
+  const panelStats = activeShirt
+    ? [
+        { key: 'front', label: 'Front', value: Math.round(activeShirt.front_occupancy ?? 0) },
+        { key: 'back', label: 'Back', value: Math.round(activeShirt.back_occupancy ?? 0) },
+        { key: 'sleeves', label: 'Sleeves', value: Math.round(activeShirt.sleeves_occupancy ?? 0) },
+      ]
+    : []
+  const profileUrl = `${getPublicSiteUrl()}${ROUTES.profile(targetId)}`
 
   return (
     <div className="min-h-screen bg-cream-50">
@@ -125,68 +135,72 @@ export default async function ProfilePage({ params, searchParams }: Props) {
         </div>
       </nav>
 
-      <main className="max-w-3xl mx-auto px-4 py-8">
-        <div className="flex flex-col md:flex-row gap-8">
-          {/* ── Left: Avatar + info ── */}
-          <aside className="md:w-56 flex-shrink-0">
-            <AvatarDisplay
-              bodyStyle={target.body_style}
-              shirtColor={target.shirt_color}
-              headFrontUrl={target.head_front_url}
-              headBackUrl={target.head_back_url}
-              scribbleCount={scribbleCount ?? 0}
-              size="lg"
-              className="mx-auto"
-            />
-
-            <div className="mt-4 text-center">
-              <h1 className="text-xl font-display font-bold text-ink-900">{target.display_name}</h1>
-              {batch && (
-                <p className="text-sm text-gray-500">
-                  {batch.programs.name} · {batch.label ?? batch.graduation_year}
-                </p>
-              )}
-              {target.yearbook_quote && (
-                <p className="mt-2 text-sm text-gray-600 italic">
-                  &ldquo;{target.yearbook_quote}&rdquo;
-                </p>
-              )}
+      <main className="mx-auto max-w-6xl px-4 py-6 sm:py-8">
+        <section className="mb-5 overflow-hidden rounded-[28px] border border-black/10 bg-white shadow-sm">
+          <div className="grid gap-0 lg:grid-cols-[minmax(0,1fr)_320px]">
+            <div className="p-5 sm:p-6">
+              <p className="mb-2 text-xs font-semibold uppercase tracking-[0.18em] text-gray-400">
+                Shirt profile
+              </p>
+              <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+                <div>
+                  <h1 className="font-display text-3xl font-bold leading-tight text-ink-900 sm:text-4xl">
+                    {target.display_name}
+                  </h1>
+                  {batch && (
+                    <p className="mt-2 text-sm text-gray-500">
+                      {batch.programs.name} · {batch.label ?? `${batch.graduation_year} Batch`}
+                    </p>
+                  )}
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  {isOwner && <ShareButton profileUrl={profileUrl} />}
+                  {isOwner && (
+                    <Link href="/settings" className="btn-secondary text-xs">
+                      Settings
+                    </Link>
+                  )}
+                  {!isOwner && permissionState === 'request' && (
+                    <RequestScribbleButton ownerId={targetId} />
+                  )}
+                  {!isOwner && permissionState === 'locked' && (
+                    <div className="rounded-xl border border-gray-200 px-3 py-2 text-xs text-gray-400">
+                      Shirt is locked
+                    </div>
+                  )}
+                </div>
+              </div>
             </div>
 
-            {/* Permission CTA */}
-            {!isOwner && (
-              <div className="mt-4">
-                {permissionState === 'request' && (
-                  <RequestScribbleButton ownerId={targetId} />
-                )}
-                {permissionState === 'locked' && (
-                  <div className="text-center text-xs text-gray-400 py-2 border border-gray-200 rounded-xl">
-                    🔒 Shirt is locked
-                  </div>
-                )}
+            <aside className="border-t border-black/10 bg-[#fbf8f0] p-5 lg:border-l lg:border-t-0">
+              <div className="flex items-center gap-4">
+                <AvatarDisplay
+                  bodyStyle={target.body_style}
+                  shirtColor={target.shirt_color}
+                  headFrontUrl={target.head_front_url}
+                  headBackUrl={target.head_back_url}
+                  scribbleCount={scribbleCount ?? 0}
+                  size="md"
+                />
+                <div>
+                  <p className="text-xs font-semibold uppercase tracking-[0.16em] text-gray-400">Memory count</p>
+                  <p className="mt-1 text-2xl font-bold text-ink-900">{scribbleCount ?? 0}</p>
+                  <p className="text-xs text-gray-500">scribbles saved</p>
+                </div>
               </div>
-            )}
+            </aside>
+          </div>
+        </section>
 
-            {/* Owner settings */}
-            {isOwner && (
-              <div className="mt-4 space-y-2">
-                <Link href="/settings" className="btn-secondary w-full text-xs text-center block">
-                  ⚙️ Settings
-                </Link>
-              </div>
-            )}
-          </aside>
-
-          {/* ── Right: Shirt view ── */}
-          <div className="flex-1 min-w-0">
-            {/* Shirt tabs (if multiple shirts) */}
+        <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_320px]">
+          <div className="min-w-0 space-y-4">
             {(shirts?.length ?? 0) > 1 && (
-              <div className="flex gap-2 mb-4">
+              <div className="flex flex-wrap gap-2">
                 {shirts!.map(s => (
                   <Link
                     key={s.id}
                     href={`?shirt=${s.shirt_number}&panel=${panel}`}
-                    className={`panel-tab ${s.shirt_number === shirtNum ? "data-[active=true]" : ""}`}
+                    className="panel-tab"
                     data-active={s.shirt_number === shirtNum}
                   >
                     Shirt {s.shirt_number}
@@ -195,18 +209,22 @@ export default async function ProfilePage({ params, searchParams }: Props) {
               </div>
             )}
 
-            {/* Panel tabs */}
-            <div className="flex gap-2 mb-4">
-              {(['front', 'back', 'sleeves'] as Panel[]).map(p => (
-                <Link
-                  key={p}
-                  href={`?shirt=${shirtNum}&panel=${p}`}
-                  className="panel-tab capitalize"
-                  data-active={panel === p}
-                >
-                  {p}
-                </Link>
-              ))}
+            <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-black/10 bg-white/80 p-2 shadow-sm">
+              <div className="flex gap-1">
+                {(['front', 'back', 'sleeves'] as Panel[]).map(p => (
+                  <Link
+                    key={p}
+                    href={`?shirt=${shirtNum}&panel=${p}`}
+                    className="panel-tab capitalize"
+                    data-active={panel === p}
+                  >
+                    {p}
+                  </Link>
+                ))}
+              </div>
+              <p className="px-2 text-xs text-gray-500">
+                Switch surface without leaving the shirt.
+              </p>
             </div>
 
             {activeShirt ? (
@@ -220,14 +238,66 @@ export default async function ProfilePage({ params, searchParams }: Props) {
                 currentUserName={viewerProfile?.display_name ?? null}
                 canScribble={canScribble}
                 isOwner={isOwner}
+                bodyStyle={target.body_style}
+                shirtColor={target.shirt_color}
+                headFrontUrl={target.head_front_url}
+                headBackUrl={target.head_back_url}
+                yearbookQuote={target.yearbook_quote}
                 textureUrl={textureUrl ?? undefined}
               />
             ) : (
-              <div className="aspect-[2/3] bg-gray-50 rounded-2xl flex items-center justify-center">
-                <p className="text-gray-400 text-sm">No shirt yet</p>
+              <div className="flex aspect-[4/5] items-center justify-center rounded-[28px] border border-dashed border-gray-200 bg-white">
+                <p className="text-sm text-gray-400">No shirt has been created yet.</p>
               </div>
             )}
           </div>
+
+          <aside className="space-y-4">
+            <section className="card p-5">
+              <h2 className="font-display text-lg font-bold text-ink-900">Shirt map</h2>
+              <div className="mt-4 space-y-3">
+                {panelStats.map(stat => (
+                  <Link key={stat.key} href={`?shirt=${shirtNum}&panel=${stat.key}`} className="block">
+                    <div className="mb-1 flex items-center justify-between text-xs">
+                      <span className="font-medium text-gray-600">{stat.label}</span>
+                      <span className="text-gray-400">{stat.value}%</span>
+                    </div>
+                    <div className="h-2 overflow-hidden rounded-full bg-gray-100">
+                      <div
+                        className="h-full rounded-full bg-ink-900 transition-all"
+                        style={{ width: `${Math.min(100, stat.value)}%` }}
+                      />
+                    </div>
+                  </Link>
+                ))}
+              </div>
+            </section>
+
+            <section className="card p-5">
+              <h2 className="font-display text-lg font-bold text-ink-900">Yearbook card</h2>
+              <div className="mt-3 rounded-2xl border border-gray-100 bg-cream-50 p-4">
+                <p className="text-sm font-semibold text-ink-900">{target.display_name}</p>
+                {batch && <p className="mt-1 text-xs text-gray-500">{batch.programs.name} · {batch.label ?? batch.graduation_year}</p>}
+                <p className="mt-4 text-sm italic text-gray-600">
+                  {target.yearbook_quote ? `“${target.yearbook_quote}”` : 'No yearbook quote yet.'}
+                </p>
+              </div>
+              <p className="mt-3 text-xs text-gray-400">
+                This is the compact card users will understand before final visual polish.
+              </p>
+            </section>
+
+            <section className="card p-5">
+              <h2 className="font-display text-lg font-bold text-ink-900">Signing state</h2>
+              <p className="mt-2 text-sm text-gray-500">
+                {isOwner
+                  ? 'You can remove anything from your shirt and share the link for more signatures.'
+                  : canScribble
+                    ? 'You can sign this shirt now. Pick a surface, choose a free spot, draw, and place it.'
+                    : 'You can view this shirt, but signing is currently restricted.'}
+              </p>
+            </section>
+          </aside>
         </div>
       </main>
     </div>
