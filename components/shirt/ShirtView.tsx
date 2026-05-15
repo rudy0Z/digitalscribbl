@@ -8,6 +8,11 @@ import DrawingCanvas, { type DrawingCanvasRef, type DrawingTool } from '@/compon
 import ScribbleToolbar from '@/components/scribble/ScribbleToolbar'
 import { cn } from '@/lib/utils/cn'
 import {
+  clampScribbleBoxToCanvas,
+  hasDrawableFabricJson,
+  type ScribbleBox,
+} from '@/lib/utils/scribbleContract'
+import {
   SHIRT_W, SHIRT_H, TOOL_PEN, CANVAS_COLORS,
 } from '@/lib/constants'
 import type { Panel } from '@/lib/supabase/types'
@@ -57,7 +62,8 @@ export default function ShirtView({
   const [fontSize,   setFontSize]   = useState<'sm' | 'md' | 'lg'>('md')
   const [fontStyle,  setFontStyle]  = useState<'normal' | 'bold' | 'italic'>('normal')
   const [isPlacing,  setIsPlacing]  = useState(false)
-  const [plantedBox, setPlantedBox] = useState<{ x: number; y: number; w: number; h: number } | null>(null)
+  const [plantedBox, setPlantedBox] = useState<ScribbleBox | null>(null)
+  const [hasDrawing, setHasDrawing] = useState(false)
   const [error,      setError]      = useState<string | null>(null)
 
   // Local removed/reported scribble IDs for optimistic UI
@@ -109,17 +115,26 @@ export default function ShirtView({
   // ── Placement ─────────────────────────────────────────────
   const enterPlacementMode = () => setMode('placement')
 
-  const handlePlant = useCallback((box: { x: number; y: number; w: number; h: number }) => {
-    setPlantedBox(box)
+  const handlePlant = useCallback((box: ScribbleBox) => {
+    const normalized = clampScribbleBoxToCanvas(box)
+    setPlantedBox(normalized)
+    setHasDrawing(false)
+    setError(null)
     setMode('drawing')
-    broadcastBoxPlanted(box.x, box.y, box.w, box.h)
+    broadcastBoxPlanted(normalized.x, normalized.y, normalized.w, normalized.h)
   }, [broadcastBoxPlanted])
 
   const handleCancel = useCallback(() => {
     setMode('browse')
     setPlantedBox(null)
+    setHasDrawing(false)
     broadcastBoxReleased()
   }, [broadcastBoxReleased])
+
+  const handleLocalStroke = useCallback((fabricJson: object) => {
+    setHasDrawing(hasDrawableFabricJson(fabricJson))
+    broadcastStroke(fabricJson)
+  }, [broadcastStroke])
 
   // ── Commit scribble ───────────────────────────────────────
   const handlePlace = useCallback(async () => {
@@ -130,8 +145,9 @@ export default function ShirtView({
     try {
       const svgContent = drawingRef.current.exportSvg()
       const canvasJson = drawingRef.current.exportJson()
+      const normalizedBox = clampScribbleBoxToCanvas(plantedBox)
 
-      if (!svgContent || svgContent.trim() === '') {
+      if (drawingRef.current.isEmpty() || !hasDrawableFabricJson(canvasJson)) {
         setError('Canvas is empty — draw something first!')
         setIsPlacing(false)
         return
@@ -144,10 +160,10 @@ export default function ShirtView({
           owner_id:     ownerId,
           shirt_number: shirt.shirt_number,
           panel,
-          x: plantedBox.x,
-          y: plantedBox.y,
-          w: plantedBox.w,
-          h: plantedBox.h,
+          x: normalizedBox.x,
+          y: normalizedBox.y,
+          w: normalizedBox.w,
+          h: normalizedBox.h,
           canvas_svg:  svgContent,
           canvas_json: canvasJson,
         }),
@@ -155,11 +171,15 @@ export default function ShirtView({
 
       if (!res.ok) {
         const body = await res.json()
-        if (body.code === 'COLLISION') {
-          setError('Someone just placed a scribble there — try a different spot.')
-        } else {
-          setError(body.error ?? 'Something went wrong')
+        const messages: Record<string, string> = {
+          COLLISION: 'Someone just placed a scribble there — try a different spot.',
+          EMPTY_CANVAS: 'Canvas is empty — draw something first!',
+          INVALID_BOX: 'That spot is no longer valid — choose another area.',
+          INVALID_SVG: 'This drawing could not be saved safely — try clearing and drawing again.',
+          FORBIDDEN: body.error ?? 'You cannot scribble on this shirt right now.',
+          SAVE_FAILED: 'Failed to save scribble — please try again.',
         }
+        setError(messages[String(body.code)] ?? body.error ?? 'Something went wrong')
         setIsPlacing(false)
         return
       }
@@ -169,6 +189,7 @@ export default function ShirtView({
       broadcastTextureUpdated(panel)
       setMode('browse')
       setPlantedBox(null)
+      setHasDrawing(false)
       onScribblePlaced?.()
       // Refresh server data (new scribble bounding box appears, texture URL updates)
       router.refresh()
@@ -403,7 +424,7 @@ export default function ShirtView({
                 fillShapes={fillShapes}
                 fontSize={fontSize}
                 fontStyle={fontStyle}
-                onStroke={broadcastStroke}
+                onStroke={handleLocalStroke}
                 onRemoteStroke={handleStrokeHandlerRequest}
               />
             </div>
@@ -451,6 +472,7 @@ export default function ShirtView({
           onClear={() => drawingRef.current?.clear()}
           onPlace={handlePlace}
           isPlacing={isPlacing}
+          canPlace={hasDrawing}
         />
       )}
 

@@ -30,6 +30,7 @@ interface ScribbleToolbarProps {
   onClear:     () => void
   onPlace:     () => void
   isPlacing:   boolean
+  canPlace:    boolean
 }
 
 // ── Tool definitions ──────────────────────────────────────────
@@ -37,7 +38,7 @@ interface ScribbleToolbarProps {
 const TOOLS: { id: DrawingTool; label: string; icon: string }[] = [
   { id: TOOL_PEN,    label: 'Pen',     icon: '✏️' },
   { id: TOOL_PENCIL, label: 'Pencil',  icon: '🖊️' },
-  { id: TOOL_ERASER, label: 'Eraser',  icon: '⌫'  },
+  { id: TOOL_ERASER, label: 'Remove stroke', icon: '⌫' },
   { id: TOOL_SELECT, label: 'Select',  icon: '↖'  },
   { id: TOOL_TEXT,   label: 'Text',    icon: 'T'   },
   { id: TOOL_LINE,   label: 'Line',    icon: '╱'   },
@@ -55,6 +56,7 @@ export default function ScribbleToolbar({
   tool, color, brushSize, opacity, fillShapes, fontSize, fontStyle,
   onTool, onColor, onBrushSize, onOpacity, onFill,
   onFontSize, onFontStyle, onUndo, onClear, onPlace, isPlacing,
+  canPlace,
 }: ScribbleToolbarProps) {
   const [showPicker, setShowPicker] = useState(false)
 
@@ -240,9 +242,9 @@ export default function ScribbleToolbar({
 
       <button
         onClick={onPlace}
-        disabled={isPlacing}
-        className="w-full py-2.5 rounded-xl bg-ink-900 hover:bg-ink-700 text-white font-semibold text-sm transition disabled:opacity-50 disabled:cursor-not-allowed shadow-sm"
-      >
+          disabled={isPlacing || !canPlace}
+          className="w-full py-2.5 rounded-xl bg-ink-900 hover:bg-ink-700 text-white font-semibold text-sm transition disabled:opacity-50 disabled:cursor-not-allowed shadow-sm"
+        >
         {isPlacing ? 'Placing…' : '✓ Place Scribble'}
       </button>
     </div>

@@ -3,11 +3,8 @@ import { createServiceClient } from '@/lib/supabase/server'
 import { requireApiUser } from '@/lib/auth/server'
 import { hasCollision, calculateOccupancy } from '@/lib/utils/collision'
 import { sanitizeScribbleSvg } from '@/lib/utils/sanitizeSvg'
-import {
-  SHIRT_W, SHIRT_H,
-  BOX_MIN_SIZE, BOX_MAX_SIZE,
-  OCCUPANCY_FULL_THRESHOLD,
-} from '@/lib/constants'
+import { hasDrawableFabricJson, normalizeScribbleBox } from '@/lib/utils/scribbleContract'
+import { SHIRT_W, SHIRT_H, OCCUPANCY_FULL_THRESHOLD } from '@/lib/constants'
 import type { Panel } from '@/lib/supabase/types'
 
 export const runtime = 'nodejs'
@@ -35,40 +32,60 @@ export async function POST(req: NextRequest) {
     owner_id,
     shirt_number = 1,
     panel,
-    x, y, w, h,
+    x: rawX,
+    y: rawY,
+    w: rawW,
+    h: rawH,
     canvas_svg,
     canvas_json,
   } = body as {
     owner_id:      string
     shirt_number?: number
     panel:         Panel
-    x: number; y: number; w: number; h: number
+    x: unknown; y: unknown; w: unknown; h: unknown
     canvas_svg:    string
-    canvas_json:   object
-  }
-
-  // Cannot scribble on your own shirt
-  if (user.id === owner_id) {
-    return NextResponse.json({ error: 'Cannot scribble on your own shirt' }, { status: 403 })
+    canvas_json:   unknown
   }
 
   // Input validation
   if (!owner_id || !panel || !canvas_svg || !canvas_json) {
-    return NextResponse.json({ error: 'Missing required fields' }, { status: 400 })
+    return NextResponse.json(
+      { error: 'Missing required fields', code: 'INVALID_BOX' },
+      { status: 400 }
+    )
+  }
+
+  // Cannot scribble on your own shirt
+  if (user.id === owner_id) {
+    return NextResponse.json(
+      { error: 'Cannot scribble on your own shirt', code: 'FORBIDDEN' },
+      { status: 403 }
+    )
   }
   if (!['front', 'back', 'sleeves'].includes(panel)) {
-    return NextResponse.json({ error: 'Invalid panel' }, { status: 400 })
+    return NextResponse.json({ error: 'Invalid panel', code: 'INVALID_BOX' }, { status: 400 })
   }
-  if (w < BOX_MIN_SIZE || w > BOX_MAX_SIZE || h < BOX_MIN_SIZE || h > BOX_MAX_SIZE) {
-    return NextResponse.json({ error: 'Bounding box size out of bounds' }, { status: 400 })
+
+  const normalizedBox = normalizeScribbleBox({ x: rawX, y: rawY, w: rawW, h: rawH })
+  if (!normalizedBox.ok) {
+    return NextResponse.json(
+      { error: normalizedBox.error, code: normalizedBox.code },
+      { status: 400 }
+    )
   }
-  if (x < 0 || y < 0 || x + w > SHIRT_W || y + h > SHIRT_H) {
-    return NextResponse.json({ error: 'Bounding box out of canvas bounds' }, { status: 400 })
+
+  if (!hasDrawableFabricJson(canvas_json)) {
+    return NextResponse.json(
+      { error: 'Canvas is empty — draw something first', code: 'EMPTY_CANVAS' },
+      { status: 400 }
+    )
   }
+
+  const { x, y, w, h } = normalizedBox.box
   const sanitizedSvg = sanitizeScribbleSvg(canvas_svg)
   if (!sanitizedSvg.ok) {
     const status = sanitizedSvg.error.includes('too large') ? 413 : 400
-    return NextResponse.json({ error: sanitizedSvg.error }, { status })
+    return NextResponse.json({ error: sanitizedSvg.error, code: 'INVALID_SVG' }, { status })
   }
 
   const db = await createServiceClient()
@@ -81,8 +98,8 @@ export async function POST(req: NextRequest) {
     .eq('shirt_number', shirt_number)
     .single()
 
-  if (!shirt) return NextResponse.json({ error: 'Shirt not found' }, { status: 404 })
-  if (shirt.is_locked) return NextResponse.json({ error: 'Shirt is locked' }, { status: 403 })
+  if (!shirt) return NextResponse.json({ error: 'Shirt not found', code: 'FORBIDDEN' }, { status: 404 })
+  if (shirt.is_locked) return NextResponse.json({ error: 'Shirt is locked', code: 'FORBIDDEN' }, { status: 403 })
 
   // ── Permission check ──────────────────────────────────────
   const { data: owner } = await db
@@ -91,10 +108,10 @@ export async function POST(req: NextRequest) {
     .eq('id', owner_id)
     .single()
 
-  if (!owner) return NextResponse.json({ error: 'Owner not found' }, { status: 404 })
+  if (!owner) return NextResponse.json({ error: 'Owner not found', code: 'FORBIDDEN' }, { status: 404 })
 
   if (owner.shirt_permission === 'locked') {
-    return NextResponse.json({ error: 'Shirt is locked' }, { status: 403 })
+    return NextResponse.json({ error: 'Shirt is locked', code: 'FORBIDDEN' }, { status: 403 })
   }
 
   if (owner.shirt_permission === 'request_only') {
@@ -106,7 +123,10 @@ export async function POST(req: NextRequest) {
       .single()
 
     if (!requestRecord || requestRecord.status !== 'approved') {
-      return NextResponse.json({ error: 'Permission required — request first' }, { status: 403 })
+      return NextResponse.json(
+        { error: 'Permission required — request first', code: 'FORBIDDEN' },
+        { status: 403 }
+      )
     }
   }
 
@@ -118,7 +138,7 @@ export async function POST(req: NextRequest) {
       .single()
 
     if (!scribbler || scribbler.batch_id !== owner.batch_id) {
-      return NextResponse.json({ error: 'Must be in the same batch' }, { status: 403 })
+      return NextResponse.json({ error: 'Must be in the same batch', code: 'FORBIDDEN' }, { status: 403 })
     }
   }
 
@@ -132,12 +152,18 @@ export async function POST(req: NextRequest) {
 
   const scribblingEnabled = settingsMap['scribbling_enabled']
   if (scribblingEnabled === false || scribblingEnabled === 'false') {
-    return NextResponse.json({ error: 'Scribbling is currently disabled' }, { status: 403 })
+    return NextResponse.json(
+      { error: 'Scribbling is currently disabled', code: 'FORBIDDEN' },
+      { status: 403 }
+    )
   }
   if (settingsMap['deadline_date'] && settingsMap['deadline_date'] !== null) {
     const deadline = new Date(settingsMap['deadline_date'] as string)
     if (new Date() > deadline) {
-      return NextResponse.json({ error: 'Scribble deadline has passed' }, { status: 403 })
+      return NextResponse.json(
+        { error: 'Scribble deadline has passed', code: 'FORBIDDEN' },
+        { status: 403 }
+      )
     }
   }
 
@@ -173,7 +199,10 @@ export async function POST(req: NextRequest) {
 
   if (scribbleErr || !newScribble) {
     console.error('Scribble insert failed:', scribbleErr)
-    return NextResponse.json({ error: 'Failed to save scribble' }, { status: 500 })
+    return NextResponse.json(
+      { error: 'Failed to save scribble', code: 'SAVE_FAILED' },
+      { status: 500 }
+    )
   }
 
   // ── Recalculate occupancy ─────────────────────────────────
