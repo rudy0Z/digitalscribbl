@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 600" fill="none">
+  <!-- Placeholder body — replace with illustrated SVGs per body style -->
+  <!-- Body silhouette -->
+  <rect x="120" y="140" width="160" height="220" rx="20" fill="#E5E7EB"/>
+  <!-- Shirt area (white — this is the scribble canvas) -->
+  <rect x="130" y="150" width="140" height="200" rx="12" fill="#F8F8F8"/>
+  <!-- Arms -->
+  <rect x="60" y="145" width="65" height="30" rx="15" fill="#E5E7EB"/>
+  <rect x="275" y="145" width="65" height="30" rx="15" fill="#E5E7EB"/>
+  <!-- Legs -->
+  <rect x="130" y="355" width="55" height="120" rx="20" fill="#E5E7EB"/>
+  <rect x="215" y="355" width="55" height="120" rx="20" fill="#E5E7EB"/>
+  <!-- Head placeholder (will be covered by head image) -->
+  <circle cx="200" cy="100" r="60" fill="#E5E7EB"/>
+</svg>

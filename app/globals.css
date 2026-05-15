@@ -1,0 +1,69 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --font-display: 'Georgia', serif;
+    --font-body:    system-ui, sans-serif;
+    --font-mono:    ui-monospace, monospace;
+  }
+
+  * {
+    box-sizing: border-box;
+  }
+
+  body {
+    @apply bg-cream-50 text-ink-900 font-body antialiased;
+  }
+
+  /* Fabric.js canvas cursor fix */
+  canvas {
+    outline: none;
+  }
+}
+
+@layer components {
+  .btn-primary {
+    @apply px-4 py-2 bg-ink-900 hover:bg-ink-700 text-white rounded-xl font-medium text-sm transition shadow-sm;
+  }
+
+  .btn-secondary {
+    @apply px-4 py-2 bg-white hover:bg-gray-50 text-ink-900 rounded-xl font-medium text-sm transition border border-gray-200;
+  }
+
+  .card {
+    @apply bg-white rounded-2xl border border-gray-100 shadow-sm;
+  }
+
+  .input {
+    @apply w-full px-3 py-2 rounded-xl border border-gray-200 bg-white text-ink-900
+           focus:outline-none focus:ring-2 focus:ring-ink-900/20 focus:border-ink-900
+           text-sm transition;
+  }
+
+  .label {
+    @apply block text-xs font-medium text-gray-500 mb-1;
+  }
+}
+
+/* Ghost box smooth movement */
+.ghost-box-transition {
+  transition: left 60ms ease-out, top 60ms ease-out;
+}
+
+/* Shirt panel tab */
+.panel-tab {
+  @apply px-3 py-1.5 rounded-lg text-sm font-medium transition;
+}
+.panel-tab[data-active='true'] {
+  @apply bg-ink-900 text-white;
+}
+.panel-tab[data-active='false'] {
+  @apply text-gray-500 hover:bg-gray-100;
+}
+
+/* Scrollbar */
+::-webkit-scrollbar { width: 6px; height: 6px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: #d1d5db; border-radius: 999px; }
