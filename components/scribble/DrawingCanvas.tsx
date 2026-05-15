@@ -10,6 +10,7 @@ import {
 } from '@/lib/constants'
 import { hasDrawableFabricJson } from '@/lib/utils/scribbleContract'
 import type { StrokeEvent } from '@/lib/hooks/useShirtChannel'
+import type { ScribbleBox } from '@/lib/utils/scribbleContract'
 
 export type DrawingTool =
   | typeof TOOL_PEN | typeof TOOL_PENCIL | typeof TOOL_TEXT
@@ -20,6 +21,8 @@ export interface DrawingCanvasRef {
   exportSvg(): string
   exportPng(): Promise<string>
   exportJson(): object
+  exportLayer(): Promise<{ box: ScribbleBox; canvasJson: object; canvasSvg: string } | null>
+  addEmoji(emoji: string): void
   isEmpty(): boolean
   undo(): void
   clear(): void
@@ -45,9 +48,11 @@ type FabricObject = import('fabric').Object
 type FabricEvent = { e: Event; target?: FabricObject | null; scenePoint?: Point }
 type Point = { x: number; y: number }
 type LiveShapeKind = typeof TOOL_LINE | typeof TOOL_RECT | typeof TOOL_CIRCLE | typeof TOOL_ARROW
+type FabricRect = { left: number; top: number; width: number; height: number }
 
 const FONT_SIZE_MAP = { sm: 14, md: 20, lg: 28 }
 const MIN_SHAPE_DRAG = 3
+const LAYER_PADDING = 10
 
 function getCanvasPoint(canvas: FabricCanvas, event: FabricEvent): Point {
   const pointer = event.scenePoint ?? (canvas as unknown as {
@@ -58,6 +63,41 @@ function getCanvasPoint(canvas: FabricCanvas, event: FabricEvent): Point {
 
 function setObjectInteractivity(canvas: FabricCanvas, selectable: boolean, evented = selectable) {
   canvas.forEachObject(object => object.set({ selectable, evented }))
+}
+
+function clampRect(rect: FabricRect, canvasW: number, canvasH: number): ScribbleBox {
+  const rawLeft = Math.max(0, Math.floor(rect.left - LAYER_PADDING))
+  const rawTop = Math.max(0, Math.floor(rect.top - LAYER_PADDING))
+  const right = Math.min(canvasW, Math.ceil(rect.left + rect.width + LAYER_PADDING))
+  const bottom = Math.min(canvasH, Math.ceil(rect.top + rect.height + LAYER_PADDING))
+  const w = Math.min(canvasW, Math.max(40, right - rawLeft))
+  const h = Math.min(canvasH, Math.max(40, bottom - rawTop))
+  return {
+    x: Math.max(0, Math.min(canvasW - w, rawLeft)),
+    y: Math.max(0, Math.min(canvasH - h, rawTop)),
+    w,
+    h,
+  }
+}
+
+function getObjectsBounds(objects: FabricObject[], canvasW: number, canvasH: number): ScribbleBox | null {
+  if (objects.length === 0) return null
+
+  let left = Number.POSITIVE_INFINITY
+  let top = Number.POSITIVE_INFINITY
+  let right = Number.NEGATIVE_INFINITY
+  let bottom = Number.NEGATIVE_INFINITY
+
+  for (const object of objects) {
+    const rect = object.getBoundingRect()
+    left = Math.min(left, rect.left)
+    top = Math.min(top, rect.top)
+    right = Math.max(right, rect.left + rect.width)
+    bottom = Math.max(bottom, rect.top + rect.height)
+  }
+
+  if (![left, top, right, bottom].every(Number.isFinite)) return null
+  return clampRect({ left, top, width: right - left, height: bottom - top }, canvasW, canvasH)
 }
 
 const DrawingCanvas = forwardRef<DrawingCanvasRef, DrawingCanvasProps>(function DrawingCanvas(
@@ -463,6 +503,62 @@ const DrawingCanvas = forwardRef<DrawingCanvasRef, DrawingCanvasProps>(function 
       return canvas.toDataURL({ format: 'png', multiplier: 1 }).split(',')[1]
     },
     exportJson: () => fabricRef.current?.toJSON() ?? {},
+    exportLayer: async () => {
+      const canvas = fabricRef.current
+      const mod = fabricMod.current
+      if (!canvas || !mod) return null
+
+      const objects = canvas.getObjects().filter(object => {
+        const json = object.toObject() as Record<string, unknown>
+        return json.visible !== false && json.opacity !== 0
+      })
+      const box = getObjectsBounds(objects, w, h)
+      if (!box) return null
+
+      const canvasEl = document.createElement('canvas')
+      canvasEl.width = box.w
+      canvasEl.height = box.h
+      const layerCanvas = new mod.StaticCanvas(canvasEl, {
+        width: box.w,
+        height: box.h,
+        backgroundColor: undefined,
+        enableRetinaScaling: false,
+      })
+
+      for (const object of objects) {
+        const cloned = await object.clone()
+        cloned.set({
+          left: Number(cloned.left ?? 0) - box.x,
+          top: Number(cloned.top ?? 0) - box.y,
+        })
+        layerCanvas.add(cloned)
+      }
+
+      layerCanvas.renderAll()
+      const canvasJson = layerCanvas.toJSON()
+      const canvasSvg = layerCanvas.toSVG()
+      layerCanvas.dispose()
+      return { box, canvasJson, canvasSvg }
+    },
+    addEmoji: (emoji: string) => {
+      const canvas = fabricRef.current
+      const mod = fabricMod.current
+      if (!canvas || !mod) return
+      cancelLiveShape()
+      const text = new mod.Text(emoji, {
+        left: Math.max(18, Math.min(w - 58, w / 2 - 28)),
+        top: Math.max(18, Math.min(h - 58, h / 2 - 28)),
+        fontSize: 42,
+        fill: colorRef.current,
+        opacity: opacityRef.current,
+        selectable: true,
+        evented: true,
+      })
+      canvas.add(text)
+      canvas.setActiveObject(text)
+      canvas.requestRenderAll()
+      commitCanvas(canvas)
+    },
     isEmpty: () => !hasDrawableFabricJson(fabricRef.current?.toJSON() ?? {}),
     undo: () => {
       const canvas = fabricRef.current

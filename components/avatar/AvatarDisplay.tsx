@@ -15,10 +15,10 @@ interface AvatarDisplayProps {
 }
 
 const SIZES = {
-  sm: { avatar: 48,  head: 16 },
-  md: { avatar: 132, head: 44 },
-  lg: { avatar: 220, head: 74 },
-  xl: { avatar: 320, head: 108 },
+  sm: { avatar: 50,  head: 22 },
+  md: { avatar: 132, head: 66 },
+  lg: { avatar: 220, head: 112 },
+  xl: { avatar: 320, head: 160 },
 }
 
 const BODY_VARIANTS: Record<string, { shoulder: number; torso: number; sleeve: number; neck: number }> = {
@@ -57,8 +57,8 @@ export default function AvatarDisplay({
   const headUrl = showBack ? (headBackUrl ?? headFrontUrl) : headFrontUrl
   const darkShirt = isDark(shirtColor)
   const stageHeight = Math.round(avatarPx * 1.06)
-  const torsoTop = Math.round(avatarPx * 0.36)
-  const torsoHeight = Math.round(avatarPx * 0.56)
+  const torsoTop = Math.round(avatarPx * 0.42)
+  const torsoHeight = Math.round(avatarPx * 0.52)
   const torsoWidth = Math.round(avatarPx * variant.torso)
   const shoulderWidth = Math.round(avatarPx * variant.shoulder)
   const sleeveWidth = Math.round(avatarPx * variant.sleeve)
@@ -90,7 +90,7 @@ export default function AvatarDisplay({
       <div
         className="absolute left-1/2 rounded-t-[999px] bg-[#dfe3ec]"
         style={{
-          top: headPx * 0.72,
+          top: headPx * 0.78,
           width: headPx * 0.52,
           height: avatarPx * variant.neck,
           transform: 'translateX(-50%)',
@@ -100,7 +100,7 @@ export default function AvatarDisplay({
       <div
         className="absolute left-1/2 rounded-[999px] border border-black/5"
         style={{
-          top: torsoTop + avatarPx * 0.01,
+          top: torsoTop + avatarPx * 0.015,
           width: shoulderWidth,
           height: avatarPx * 0.16,
           transform: 'translateX(-50%)',

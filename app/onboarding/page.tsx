@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import { BODY_STYLES, SHIRT_COLORS } from '@/lib/constants'
 import AvatarDisplay from '@/components/avatar/AvatarDisplay'
+import HeadCropUpload from '@/components/avatar/HeadCropUpload'
 import { cn } from '@/lib/utils/cn'
 
 type Step = 1 | 2 | 3
@@ -42,7 +43,6 @@ export default function OnboardingPage() {
   const [programs, setPrograms] = useState<{ id: string; name: string }[]>([])
   const [batches, setBatches]   = useState<{ id: string; label: string | null; graduation_year: number }[]>([])
   const [saving, setSaving]     = useState(false)
-  const [uploadingHead, setUploadingHead] = useState<'front' | 'back' | null>(null)
   const [error, setError]       = useState<string | null>(null)
 
   // ── Load user + academic structure ────────────────────────
@@ -85,20 +85,6 @@ export default function OnboardingPage() {
 
   const set = (k: keyof FormState, v: string | null) =>
     setForm(f => ({ ...f, [k]: v }))
-
-  // ── Head upload ───────────────────────────────────────────
-  const uploadHead = async (file: File, side: 'front' | 'back') => {
-    setUploadingHead(side)
-    const fd = new FormData()
-    fd.append('file', file)
-    fd.append('side', side)
-    const res = await fetch('/api/avatar/upload-head', { method: 'POST', body: fd })
-    if (res.ok) {
-      const { url } = await res.json()
-      set(side === 'front' ? 'headFrontUrl' : 'headBackUrl', url)
-    }
-    setUploadingHead(null)
-  }
 
   // ── Step navigation ───────────────────────────────────────
   const canProceed1 = form.displayName.trim() && form.enrollmentNumber.trim() &&
@@ -282,20 +268,18 @@ export default function OnboardingPage() {
                 <p className="text-xs text-gray-400 mb-2">
                   Generate your cartoon in ChatGPT or Ideogram, download, then upload here.
                 </p>
-                <HeadUpload
+                <HeadCropUpload
                   side="front"
                   currentUrl={form.headFrontUrl}
-                  uploading={uploadingHead === 'front'}
-                  onFile={f => uploadHead(f, 'front')}
+                  onUploaded={url => set('headFrontUrl', url)}
                 />
               </div>
               <div>
                 <label className="label">Back head</label>
-                <HeadUpload
+                <HeadCropUpload
                   side="back"
                   currentUrl={form.headBackUrl}
-                  uploading={uploadingHead === 'back'}
-                  onFile={f => uploadHead(f, 'back')}
+                  onUploaded={url => set('headBackUrl', url)}
                 />
               </div>
             </div>
@@ -344,36 +328,5 @@ export default function OnboardingPage() {
         )}
       </div>
     </div>
-  )
-}
-
-// ── HeadUpload sub-component ──────────────────────────────────
-
-function HeadUpload({
-  side, currentUrl, uploading, onFile
-}: { side: string; currentUrl: string | null; uploading: boolean; onFile: (f: File) => void }) {
-  return (
-    <label className={cn(
-      'flex items-center gap-3 p-3 rounded-xl border-2 border-dashed cursor-pointer transition',
-      'hover:border-ink-900/40 border-gray-200'
-    )}>
-      {currentUrl ? (
-        <img src={currentUrl} alt="" className="w-12 h-12 rounded-full object-cover" />
-      ) : (
-        <div className="w-12 h-12 rounded-full bg-gray-100 flex items-center justify-center text-xl">
-          {uploading ? '⏳' : '📷'}
-        </div>
-      )}
-      <div className="flex-1">
-        <p className="text-sm font-medium text-ink-700">
-          {currentUrl ? 'Change image' : `Upload ${side} head`}
-        </p>
-        <p className="text-xs text-gray-400">PNG or JPEG, max 5 MB</p>
-      </div>
-      <input type="file" accept="image/png,image/jpeg" className="hidden"
-        onChange={e => { const f = e.target.files?.[0]; if (f) onFile(f) }}
-        disabled={uploading}
-      />
-    </label>
   )
 }

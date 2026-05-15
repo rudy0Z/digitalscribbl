@@ -29,6 +29,7 @@ interface ScribbleToolbarProps {
   onUndo:      () => void
   onClear:     () => void
   onPlace:     () => void
+  onEmoji?:     (emoji: string) => void
   isPlacing:   boolean
   canPlace:    boolean
 }
@@ -48,14 +49,14 @@ const TOOLS: { id: DrawingTool; label: string; icon: string }[] = [
 ]
 
 const SHAPE_TOOLS = [TOOL_RECT, TOOL_CIRCLE, TOOL_ARROW] as DrawingTool[]
-const FREEHAND_TOOLS = [TOOL_PEN, TOOL_PENCIL, TOOL_ERASER] as DrawingTool[]
+const EMOJI_STAMPS = ['❤️', '😂', '🥹', '🔥', '✨', '🫶', '😭', '🫡', '⭐']
 
 // ── Component ─────────────────────────────────────────────────
 
 export default function ScribbleToolbar({
   tool, color, brushSize, opacity, fillShapes, fontSize, fontStyle,
   onTool, onColor, onBrushSize, onOpacity, onFill,
-  onFontSize, onFontStyle, onUndo, onClear, onPlace, isPlacing,
+  onFontSize, onFontStyle, onUndo, onClear, onPlace, onEmoji, isPlacing,
   canPlace,
 }: ScribbleToolbarProps) {
   const [showPicker, setShowPicker] = useState(false)
@@ -92,6 +93,26 @@ export default function ScribbleToolbar({
       </div>
 
       <hr className="border-gray-100" />
+
+      {onEmoji && (
+        <div>
+          <p className="text-[10px] font-semibold text-gray-400 uppercase tracking-wide mb-1.5">Emoji</p>
+          <div className="grid grid-cols-5 md:grid-cols-3 gap-1">
+            {EMOJI_STAMPS.map(emoji => (
+              <button
+                key={emoji}
+                title={`Add ${emoji}`}
+                onClick={() => onEmoji(emoji)}
+                className="aspect-square rounded-lg bg-gray-100 text-base transition hover:bg-gray-200"
+              >
+                {emoji}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {onEmoji && <hr className="border-gray-100" />}
 
       {/* ── Colour ────────────────────────────────────────── */}
       {tool !== TOOL_ERASER && tool !== TOOL_SELECT && (

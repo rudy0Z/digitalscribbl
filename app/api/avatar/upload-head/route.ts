@@ -26,8 +26,8 @@ export async function POST(req: NextRequest) {
   const { fileTypeFromBuffer } = await import('file-type')
   const type    = await fileTypeFromBuffer(buffer)
 
-  if (!type || !['image/png', 'image/jpeg'].includes(type.mime)) {
-    return NextResponse.json({ error: 'Only PNG and JPEG images are accepted' }, { status: 400 })
+  if (!type || !['image/png', 'image/jpeg', 'image/webp'].includes(type.mime)) {
+    return NextResponse.json({ error: 'Only PNG, JPEG, and WebP images are accepted' }, { status: 400 })
   }
   if (buffer.length > HEAD_MAX_BYTES) {
     return NextResponse.json({ error: 'File too large — max 5 MB' }, { status: 413 })

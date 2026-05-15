@@ -32,6 +32,7 @@ export async function POST(req: NextRequest) {
     owner_id,
     shirt_number = 1,
     panel,
+    placement_mode = 'box',
     x: rawX,
     y: rawY,
     w: rawW,
@@ -41,6 +42,7 @@ export async function POST(req: NextRequest) {
   } = body as {
     owner_id:      string
     shirt_number?: number
+    placement_mode?: 'box' | 'direct'
     panel:         Panel
     x: unknown; y: unknown; w: unknown; h: unknown
     canvas_svg:    string
@@ -66,7 +68,12 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'Invalid panel', code: 'INVALID_BOX' }, { status: 400 })
   }
 
-  const normalizedBox = normalizeScribbleBox({ x: rawX, y: rawY, w: rawW, h: rawH })
+  const normalizedBox = normalizeScribbleBox(
+    { x: rawX, y: rawY, w: rawW, h: rawH },
+    placement_mode === 'direct'
+      ? { maxSize: Math.max(SHIRT_W, SHIRT_H) }
+      : undefined,
+  )
   if (!normalizedBox.ok) {
     return NextResponse.json(
       { error: normalizedBox.error, code: normalizedBox.code },
@@ -176,7 +183,7 @@ export async function POST(req: NextRequest) {
     .eq('is_hidden', false)
 
   const candidate = { x, y, w, h }
-  if (hasCollision(candidate, existingScribbles ?? [])) {
+  if (placement_mode !== 'direct' && hasCollision(candidate, existingScribbles ?? [])) {
     return NextResponse.json(
       { error: 'Someone just placed a scribble there — try a different spot', code: 'COLLISION' },
       { status: 409 }

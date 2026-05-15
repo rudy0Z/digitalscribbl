@@ -293,7 +293,7 @@ export default async function ProfilePage({ params, searchParams }: Props) {
                 {isOwner
                   ? 'You can remove anything from your shirt and share the link for more signatures.'
                   : canScribble
-                    ? 'You can sign this shirt now. Pick a surface, choose a free spot, draw, and place it.'
+                    ? 'You can sign this shirt now. Open the studio, zoom into the fabric, draw, and save your mark.'
                     : 'You can view this shirt, but signing is currently restricted.'}
               </p>
             </section>
