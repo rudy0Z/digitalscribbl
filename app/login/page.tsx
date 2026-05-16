@@ -19,6 +19,7 @@ function LoginContent() {
 
   const [loading, setLoading] = useState(false)
   const supabase = createClient()
+  const showDevTesting = process.env.NODE_ENV !== 'production'
 
   const signIn = async () => {
     setLoading(true)
@@ -86,9 +87,11 @@ function LoginContent() {
         <p className="mt-6 text-center text-xs text-gray-400">
           Built for one farewell. Designed to last forever.
         </p>
-        <p className="mt-2 text-center text-xs text-gray-400">
-          Dev testing: <Link href="/dev/test-users" className="underline underline-offset-2">switch local test users</Link>
-        </p>
+        {showDevTesting && (
+          <p className="mt-2 text-center text-xs text-gray-400">
+            Dev testing: <Link href="/dev/test-users" className="underline underline-offset-2">switch local test users</Link>
+          </p>
+        )}
       </div>
     </div>
   )
