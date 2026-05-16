@@ -9,6 +9,8 @@ export type BodyStyle = 'M1' | 'M2' | 'M3' | 'F1' | 'F2' | 'F3'
 export type ShirtPermission = 'open' | 'batch_only' | 'request_only' | 'locked'
 export type Panel = 'front' | 'back' | 'sleeves'
 export type RequestStatus = 'pending' | 'approved' | 'rejected'
+export type ExportRequestType = 'batch' | 'group'
+export type ExportRequestStatus = 'pending' | 'approved' | 'rejected' | 'fulfilled'
 export type NotificationType =
   | 'scribble_received'
   | 'scribble_live'
@@ -301,6 +303,73 @@ export type Database = {
         Update: Record<string, never>
         Relationships: []
       }
+      export_requests: {
+        Row: {
+          id:           string
+          requester_id: string
+          request_type: string
+          batch_id:     string | null
+          group_id:     string | null
+          note:         string | null
+          status:       string
+          admin_note:   string | null
+          created_at:   string
+          updated_at:   string
+          resolved_at:  string | null
+          resolved_by:  string | null
+        }
+        Insert: {
+          id?:           string
+          requester_id:  string
+          request_type:  string
+          batch_id?:     string | null
+          group_id?:     string | null
+          note?:         string | null
+          status?:       string
+          admin_note?:   string | null
+          created_at?:   string
+          updated_at?:   string
+          resolved_at?:  string | null
+          resolved_by?:  string | null
+        }
+        Update: {
+          status?:      string
+          admin_note?:  string | null
+          updated_at?:  string
+          resolved_at?: string | null
+          resolved_by?: string | null
+        }
+        Relationships: []
+      }
+      error_logs: {
+        Row: {
+          id:          string
+          user_id:     string | null
+          route:       string
+          error_code:  string | null
+          message:     string
+          metadata:    Json
+          user_agent:  string | null
+          created_at:  string
+          resolved_at: string | null
+          resolved_by: string | null
+        }
+        Insert: {
+          id?:         string
+          user_id?:    string | null
+          route:       string
+          error_code?: string | null
+          message:     string
+          metadata?:   Json
+          user_agent?: string | null
+          created_at?: string
+        }
+        Update: {
+          resolved_at?: string | null
+          resolved_by?: string | null
+        }
+        Relationships: []
+      }
       platform_settings: {
         Row:    { key: string; value: Json; updated_at: string; updated_by: string | null }
         Insert: { key: string; value: Json; updated_by?: string | null }
@@ -327,3 +396,5 @@ export type BatchRow          = Database['public']['Tables']['batches']['Row']
 export type FriendGroupRow    = Database['public']['Tables']['friend_groups']['Row']
 export type ScribbleRequestRow = Database['public']['Tables']['scribble_requests']['Row']
 export type ScribbleReactionRow = Database['public']['Tables']['scribble_reactions']['Row']
+export type ExportRequestRow = Database['public']['Tables']['export_requests']['Row']
+export type ErrorLogRow = Database['public']['Tables']['error_logs']['Row']

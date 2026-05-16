@@ -19,6 +19,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createServiceClient } from '@/lib/supabase/server'
 import { requireApiUser } from '@/lib/auth/server'
 import { SHIRT_W, SHIRT_H } from '@/lib/constants'
+import { canExportProfileCard } from '@/lib/utils/exportAccess'
 
 export const runtime = 'nodejs'
 
@@ -45,11 +46,28 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: 'userId required' }, { status: 400 })
   }
 
-  // Auth — must be logged in (any user can export any public profile card)
+  // Auth — normal users can export only their own profile card. Admins retain
+  // manual export access for the final yearbook extraction workflow.
   const auth = await requireApiUser()
   if (!auth) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
   const db = await createServiceClient()
+  const { data: viewerProfile } = await db
+    .from('users')
+    .select('is_admin')
+    .eq('id', auth.user.id)
+    .single()
+
+  if (!canExportProfileCard({
+    viewerId: auth.user.id,
+    targetUserId: userId,
+    isAdmin: Boolean(viewerProfile?.is_admin),
+  })) {
+    return NextResponse.json(
+      { error: 'You can only export your own profile card. Group and batch exports must be requested manually.' },
+      { status: 403 }
+    )
+  }
 
   // Fetch target user
   const { data: profile } = await db

@@ -21,13 +21,22 @@ const SIZES = {
   xl: { avatar: 320, head: 160 },
 }
 
-const BODY_VARIANTS: Record<string, { shoulder: number; torso: number; sleeve: number; neck: number }> = {
-  M1: { shoulder: 0.86, torso: 0.58, sleeve: 0.23, neck: 0.20 },
-  M2: { shoulder: 0.92, torso: 0.62, sleeve: 0.25, neck: 0.22 },
-  M3: { shoulder: 0.80, torso: 0.54, sleeve: 0.21, neck: 0.18 },
-  F1: { shoulder: 0.78, torso: 0.52, sleeve: 0.20, neck: 0.18 },
-  F2: { shoulder: 0.84, torso: 0.56, sleeve: 0.23, neck: 0.20 },
-  F3: { shoulder: 0.82, torso: 0.55, sleeve: 0.20, neck: 0.17 },
+const BODY_VARIANTS: Record<string, {
+  shoulder: number
+  torso: number
+  sleeve: number
+  neck: number
+  taper: number
+  sleeveAngle: number
+  sleeveHeight: number
+  neckline: number
+}> = {
+  M1: { shoulder: 0.86, torso: 0.58, sleeve: 0.23, neck: 0.20, taper: 6,  sleeveAngle: 7,  sleeveHeight: 0.18, neckline: 34 },
+  M2: { shoulder: 0.92, torso: 0.62, sleeve: 0.25, neck: 0.22, taper: 4,  sleeveAngle: 9,  sleeveHeight: 0.19, neckline: 32 },
+  M3: { shoulder: 0.80, torso: 0.54, sleeve: 0.21, neck: 0.18, taper: 8,  sleeveAngle: 5,  sleeveHeight: 0.17, neckline: 36 },
+  F1: { shoulder: 0.78, torso: 0.52, sleeve: 0.20, neck: 0.18, taper: 10, sleeveAngle: 6,  sleeveHeight: 0.16, neckline: 40 },
+  F2: { shoulder: 0.84, torso: 0.56, sleeve: 0.23, neck: 0.20, taper: 7,  sleeveAngle: 8,  sleeveHeight: 0.18, neckline: 38 },
+  F3: { shoulder: 0.82, torso: 0.55, sleeve: 0.20, neck: 0.17, taper: 9,  sleeveAngle: 10, sleeveHeight: 0.16, neckline: 42 },
 }
 
 const HEAD_PLACEHOLDER =
@@ -83,6 +92,7 @@ export default function AvatarDisplay({
           alt="Avatar head"
           fill
           sizes={`${headPx}px`}
+          loading={size === 'lg' || size === 'xl' ? 'eager' : 'lazy'}
           className={showBack ? 'object-cover opacity-70 blur-[0.4px]' : 'object-cover'}
         />
       </div>
@@ -115,9 +125,9 @@ export default function AvatarDisplay({
           top: torsoTop + avatarPx * 0.035,
           left: (avatarPx - shoulderWidth) / 2 - sleeveWidth * 0.05,
           width: sleeveWidth,
-          height: avatarPx * 0.18,
+          height: avatarPx * variant.sleeveHeight,
           background: shirtColor,
-          transform: 'rotate(-7deg)',
+          transform: `rotate(-${variant.sleeveAngle}deg)`,
         }}
       />
 
@@ -127,9 +137,9 @@ export default function AvatarDisplay({
           top: torsoTop + avatarPx * 0.035,
           right: (avatarPx - shoulderWidth) / 2 - sleeveWidth * 0.05,
           width: sleeveWidth,
-          height: avatarPx * 0.18,
+          height: avatarPx * variant.sleeveHeight,
           background: shirtColor,
-          transform: 'rotate(7deg)',
+          transform: `rotate(${variant.sleeveAngle}deg)`,
         }}
       />
 
@@ -145,12 +155,13 @@ export default function AvatarDisplay({
           transform: 'translateX(-50%)',
           borderRadius: `${Math.max(12, avatarPx * 0.06)}px ${Math.max(12, avatarPx * 0.06)}px ${Math.max(18, avatarPx * 0.12)}px ${Math.max(18, avatarPx * 0.12)}px`,
           background: shirtColor,
+          clipPath: `polygon(0 0, 100% 0, ${100 - variant.taper}% 100%, ${variant.taper}% 100%)`,
           boxShadow: 'inset 0 0 0 1px rgba(255,255,255,0.22), inset 0 -18px 32px rgba(0,0,0,0.05)',
         }}
       >
         <div
           className={cn('absolute left-1/2 top-0 h-[24%] -translate-x-1/2 rounded-b-full border-x border-b', darkShirt ? 'border-white/25 bg-black/15' : 'border-black/10 bg-white/45')}
-          style={{ width: '34%' }}
+          style={{ width: `${variant.neckline}%` }}
         />
         {showBack && (
           <div className={cn('absolute left-1/2 top-[10%] h-px w-[42%] -translate-x-1/2', darkShirt ? 'bg-white/20' : 'bg-black/10')} />

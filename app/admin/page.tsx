@@ -53,6 +53,7 @@ export default async function AdminPage() {
             )}
           </Link>
           <Link href="/admin/yearbook"    className="hover:text-gray-300 transition">Yearbook</Link>
+          <Link href="/admin/errors"      className="hover:text-gray-300 transition">Errors</Link>
         </div>
       </nav>
 

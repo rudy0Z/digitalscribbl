@@ -4,6 +4,7 @@ import { requirePageUser } from '@/lib/auth/server'
 import AvatarDisplay from '@/components/avatar/AvatarDisplay'
 import { ROUTES } from '@/lib/constants'
 import YearbookControls from './YearbookControls'
+import ExportRequestForm from './ExportRequestForm'
 
 export const dynamic = 'force-dynamic'
 
@@ -71,6 +72,15 @@ export default async function YearbookPage({ searchParams }: Props) {
         ?? String((activeBatch as unknown as { graduation_year: number }).graduation_year))
     : 'All batches'
 
+  const { data: groupMemberships } = await supabase
+    .from('friend_group_members')
+    .select('friend_groups(id, name)')
+    .eq('user_id', user.id)
+
+  const exportGroups = (groupMemberships ?? [])
+    .map(row => row.friend_groups as unknown as { id: string; name: string } | null)
+    .filter((group): group is { id: string; name: string } => Boolean(group?.id))
+
   return (
     <div className="min-h-screen bg-cream-50">
       {/* Nav */}
@@ -100,6 +110,10 @@ export default async function YearbookPage({ searchParams }: Props) {
             ⬇ My card (PNG)
           </Link>
         </div>
+      </div>
+
+      <div className="mx-auto max-w-6xl px-4 pt-3">
+        <ExportRequestForm activeBatchId={activeBatchId} batchLabel={batchLabel} groups={exportGroups} />
       </div>
 
       {/* ── Yearbook grid ── */}
