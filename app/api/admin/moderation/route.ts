@@ -69,3 +69,42 @@ export async function POST(req: NextRequest) {
 
   return NextResponse.json({ error: 'Unknown action' }, { status: 400 })
 }
+
+export async function PATCH(req: NextRequest) {
+  const auth = await requireApiUser()
+  if (!auth) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  const { supabase, user } = auth
+
+  const { data: me } = await supabase.from('users').select('is_admin').eq('id', user.id).single()
+  if (!me?.is_admin) return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+
+  const { report_id, action } = await req.json().catch(() => ({}))
+  if (!report_id || !['dismiss', 'suspend'].includes(action)) {
+    return NextResponse.json({ error: 'report_id and valid action required' }, { status: 400 })
+  }
+
+  const db = await createServiceClient()
+  const { data: report } = await db
+    .from('user_reports')
+    .select('reported_user_id')
+    .eq('id', report_id)
+    .single()
+
+  if (!report) return NextResponse.json({ error: 'Report not found' }, { status: 404 })
+
+  if (action === 'suspend') {
+    await db.from('users').update({ is_suspended: true }).eq('id', report.reported_user_id)
+  }
+
+  const { error } = await db
+    .from('user_reports')
+    .update({
+      status: action === 'suspend' ? 'actioned' : 'dismissed',
+      resolved_at: new Date().toISOString(),
+      resolved_by: user.id,
+    })
+    .eq('id', report_id)
+
+  if (error) return NextResponse.json({ error: 'Could not update report' }, { status: 500 })
+  return NextResponse.json({ success: true })
+}

@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { createClient } from '@/lib/supabase/server'
+import { createClient, createServiceClient } from '@/lib/supabase/server'
+import { getAccountKind, getAllowedEmailDomains } from '@/lib/utils/safetyAccess'
 
 export async function GET(req: NextRequest) {
   const { searchParams, origin } = new URL(req.url)
@@ -21,52 +22,56 @@ export async function GET(req: NextRequest) {
     return NextResponse.redirect(`${origin}/login?error=auth_failed`)
   }
 
-  // Validate email domain
-  const allowedDomains = (process.env.NEXT_PUBLIC_ALLOWED_EMAIL_DOMAINS ?? '')
-    .split(',')
-    .map(d => d.trim().toLowerCase())
-    .filter(Boolean)
-
-  const emailDomain = user.email?.split('@')[1]?.toLowerCase()
-
-  if (allowedDomains.length > 0 && emailDomain && !allowedDomains.includes(emailDomain)) {
+  if (!user.email) {
     await supabase.auth.signOut()
-    return NextResponse.redirect(`${origin}/login?error=wrong_domain`)
+    return NextResponse.redirect(`${origin}/login?error=missing_email`)
   }
+
+  const accountKind = getAccountKind(user.email, getAllowedEmailDomains())
+  const isUniversity = accountKind === 'university'
+  const db = await createServiceClient()
 
   // Upsert user row (first sign-in creates the record)
-  const { data: existingUser } = await supabase
+  const { data: existingUser } = await db
     .from('users')
-    .select('id, onboarding_completed')
+    .select('id, onboarding_completed, is_university_verified')
     .eq('id', user.id)
-    .single()
+    .maybeSingle()
 
   if (!existingUser) {
-    // First sign-in — create user row
-    await supabase.from('users').insert({
+    const { error: insertError } = await db.from('users').insert({
       id:           user.id,
-      email:        user.email!,
+      email:        user.email,
       display_name: user.user_metadata?.full_name ?? user.email!.split('@')[0],
+      onboarding_completed: !isUniversity,
+      shirt_permission: isUniversity ? 'open' : 'locked',
+      is_university_verified: isUniversity,
     })
 
-    // Create default Shirt 1
-    await supabase.from('shirts').insert({
-      owner_id:     user.id,
-      shirt_number: 1,
-    })
+    if (insertError) {
+      console.error('Google callback user insert failed:', insertError)
+      return NextResponse.redirect(`${origin}/login?error=profile_create_failed`)
+    }
 
-    return NextResponse.redirect(`${origin}/onboarding`)
+    if (isUniversity) {
+      await db.from('shirts').insert({ owner_id: user.id, shirt_number: 1 })
+      return NextResponse.redirect(`${origin}/onboarding`)
+    }
+
+    return NextResponse.redirect(`${origin}/dashboard`)
   }
 
-  if (!existingUser.onboarding_completed) {
-    return NextResponse.redirect(`${origin}/onboarding`)
-  }
-
-  // Update last_seen
-  await supabase
+  await db
     .from('users')
-    .update({ last_seen: new Date().toISOString() })
+    .update({
+      last_seen: new Date().toISOString(),
+      is_university_verified: isUniversity,
+    })
     .eq('id', user.id)
+
+  if (isUniversity && !existingUser.onboarding_completed) {
+    return NextResponse.redirect(`${origin}/onboarding`)
+  }
 
   return NextResponse.redirect(`${origin}${next}`)
 }

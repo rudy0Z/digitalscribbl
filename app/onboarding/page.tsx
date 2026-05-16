@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useMemo, useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import { BODY_STYLES, SHIRT_COLORS } from '@/lib/constants'
@@ -24,7 +24,7 @@ interface FormState {
 
 export default function OnboardingPage() {
   const router = useRouter()
-  const supabase = createClient()
+  const supabase = useMemo(() => createClient(), [])
 
   const [step, setStep]   = useState<Step>(1)
   const [userId, setUserId] = useState<string | null>(null)
@@ -49,17 +49,35 @@ export default function OnboardingPage() {
   useEffect(() => {
     supabase.auth.getUser().then(({ data: { user } }) => {
       if (!user) { router.push('/login'); return }
-      setUserId(user.id)
-      setForm(f => ({
-        ...f,
-        displayName: user.user_metadata?.full_name ?? user.email?.split('@')[0] ?? '',
-      }))
+      fetch('/api/auth/sync-user', { method: 'POST' })
+        .then(res => res.json())
+        .then(async sync => {
+          if (sync?.account_kind === 'external') {
+            router.push('/dashboard')
+            return
+          }
+          const { data: profile } = await supabase
+            .from('users')
+            .select('is_university_verified')
+            .eq('id', user.id)
+            .single()
+          if (profile && !profile.is_university_verified) {
+            router.push('/dashboard')
+            return
+          }
+          setUserId(user.id)
+          setForm(f => ({
+            ...f,
+            displayName: user.user_metadata?.full_name ?? user.email?.split('@')[0] ?? '',
+          }))
+        })
+        .catch(() => router.push('/login'))
     })
 
     supabase.from('academic_groups').select('id, name').order('name').then(({ data }) => {
       setGroups(data ?? [])
     })
-  }, [])
+  }, [router, supabase])
 
   // Load programs when group changes
   useEffect(() => {
@@ -70,7 +88,7 @@ export default function OnboardingPage() {
       .order('name')
       .then(({ data }) => setPrograms(data ?? []))
     setForm(f => ({ ...f, programId: '', batchId: '' }))
-  }, [form.academicGroupId])
+  }, [form.academicGroupId, supabase])
 
   // Load batches when program changes
   useEffect(() => {
@@ -81,7 +99,7 @@ export default function OnboardingPage() {
       .order('graduation_year', { ascending: false })
       .then(({ data }) => setBatches(data ?? []))
     setForm(f => ({ ...f, batchId: '' }))
-  }, [form.programId])
+  }, [form.programId, supabase])
 
   const set = (k: keyof FormState, v: string | null) =>
     setForm(f => ({ ...f, [k]: v }))

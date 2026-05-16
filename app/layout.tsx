@@ -1,5 +1,6 @@
 import type { Metadata } from 'next'
 import './globals.css'
+import ReportIssueButton from '@/components/support/ReportIssueButton'
 
 export const metadata: Metadata = {
   title: 'Scribbl — Digital Farewell Platform',
@@ -14,7 +15,10 @@ export const metadata: Metadata = {
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="en" suppressHydrationWarning>
-      <body suppressHydrationWarning>{children}</body>
+      <body suppressHydrationWarning>
+        {children}
+        <ReportIssueButton />
+      </body>
     </html>
   )
 }

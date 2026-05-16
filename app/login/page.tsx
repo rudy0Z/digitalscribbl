@@ -5,11 +5,13 @@ import { createClient } from '@/lib/supabase/client'
 import Link from 'next/link'
 import { useSearchParams } from 'next/navigation'
 import { Suspense } from 'react'
+import { getAllowedEmailDomains, isAllowedEmailDomain } from '@/lib/utils/safetyAccess'
 
 const ERROR_MESSAGES: Record<string, string> = {
-  wrong_domain:  'Please use your college Google account to sign in.',
   auth_failed:   'Sign-in failed. Please try again.',
   missing_code:  'Something went wrong with the sign-in flow. Please try again.',
+  missing_email: 'Your provider did not return an email address.',
+  profile_create_failed: 'Could not create your account. Please try again.',
 }
 
 function LoginContent() {
@@ -18,8 +20,15 @@ function LoginContent() {
   const errorMsg = errorKey ? ERROR_MESSAGES[errorKey] : null
 
   const [loading, setLoading] = useState(false)
+  const [otpEmail, setOtpEmail] = useState('')
+  const [otpCode, setOtpCode] = useState('')
+  const [otpSent, setOtpSent] = useState(false)
+  const [otpLoading, setOtpLoading] = useState(false)
+  const [otpMessage, setOtpMessage] = useState<string | null>(null)
   const supabase = createClient()
   const showDevTesting = process.env.NODE_ENV !== 'production'
+  const allowedDomains = getAllowedEmailDomains()
+  const primaryDomain = allowedDomains[0] ?? 'your college domain'
 
   const signIn = async () => {
     setLoading(true)
@@ -39,6 +48,57 @@ function LoginContent() {
     }
   }
 
+  const sendOtp = async () => {
+    const email = otpEmail.trim().toLowerCase()
+    setOtpMessage(null)
+    if (!isAllowedEmailDomain(email, allowedDomains)) {
+      setOtpMessage(`Use your ${primaryDomain} email for the first profile verification. Guests can continue with Google.`)
+      return
+    }
+
+    setOtpLoading(true)
+    const { error } = await supabase.auth.signInWithOtp({
+      email,
+      options: {
+        shouldCreateUser: true,
+      },
+    })
+    setOtpLoading(false)
+    if (error) {
+      setOtpMessage(error.message)
+      return
+    }
+    setOtpSent(true)
+    setOtpMessage('Code sent. Check your university mailbox.')
+  }
+
+  const verifyOtp = async () => {
+    const email = otpEmail.trim().toLowerCase()
+    const token = otpCode.trim()
+    setOtpMessage(null)
+    if (!email || !token) {
+      setOtpMessage('Enter your email and the code from your mailbox.')
+      return
+    }
+
+    setOtpLoading(true)
+    const { error } = await supabase.auth.verifyOtp({ email, token, type: 'email' })
+    if (error) {
+      setOtpLoading(false)
+      setOtpMessage(error.message)
+      return
+    }
+
+    const res = await fetch('/api/auth/sync-user', { method: 'POST' })
+    const data = await res.json().catch(() => null)
+    setOtpLoading(false)
+    if (!res.ok || !data?.next) {
+      setOtpMessage(data?.error ?? 'Could not finish sign in.')
+      return
+    }
+    window.location.href = data.next
+  }
+
   return (
     <div className="min-h-screen bg-cream-50 flex items-center justify-center p-4">
       <div className="w-full max-w-sm">
@@ -55,7 +115,7 @@ function LoginContent() {
         <div className="card p-8">
           <h2 className="text-lg font-semibold text-ink-900 mb-1">Welcome back</h2>
           <p className="text-sm text-gray-400 mb-6">
-            Sign in with your college Google account to continue.
+            First profile setup uses your university email OTP. Google can be linked for quick returns or guest access.
           </p>
 
           {errorMsg && (
@@ -63,6 +123,49 @@ function LoginContent() {
               {errorMsg}
             </div>
           )}
+
+          <div className="space-y-3">
+            <div>
+              <label className="label">University email</label>
+              <input
+                className="input"
+                type="email"
+                value={otpEmail}
+                onChange={e => setOtpEmail(e.target.value)}
+                placeholder={`name@${primaryDomain}`}
+              />
+            </div>
+            {otpSent && (
+              <div>
+                <label className="label">One-time code</label>
+                <input
+                  className="input"
+                  inputMode="numeric"
+                  value={otpCode}
+                  onChange={e => setOtpCode(e.target.value)}
+                  placeholder="6 digit code"
+                />
+              </div>
+            )}
+            {otpMessage && (
+              <p className="rounded-xl border border-gray-100 bg-cream-50 px-3 py-2 text-xs text-gray-600">
+                {otpMessage}
+              </p>
+            )}
+            <button
+              onClick={otpSent ? verifyOtp : sendOtp}
+              disabled={otpLoading}
+              className="btn-primary w-full"
+            >
+              {otpLoading ? 'Please wait…' : otpSent ? 'Verify and continue' : 'Send university OTP'}
+            </button>
+          </div>
+
+          <div className="my-5 flex items-center gap-3">
+            <div className="h-px flex-1 bg-gray-100" />
+            <span className="text-[10px] font-semibold uppercase tracking-[0.18em] text-gray-300">or</span>
+            <div className="h-px flex-1 bg-gray-100" />
+          </div>
 
           <button
             onClick={signIn}
@@ -80,7 +183,7 @@ function LoginContent() {
           </button>
 
           <p className="mt-4 text-xs text-center text-gray-400">
-            Only {process.env.NEXT_PUBLIC_ALLOWED_EMAIL_DOMAINS?.split(',')[0] ?? 'college'} emails accepted
+            Non-university Google accounts can view and request access, but cannot create a shirt profile.
           </p>
         </div>
 

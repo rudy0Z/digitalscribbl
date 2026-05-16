@@ -4,6 +4,7 @@ import { requireApiUser } from '@/lib/auth/server'
 import { hasCollision, calculateOccupancy } from '@/lib/utils/collision'
 import { sanitizeScribbleSvg } from '@/lib/utils/sanitizeSvg'
 import { hasDrawableFabricJson, normalizeScribbleBox } from '@/lib/utils/scribbleContract'
+import { canAttemptScribble } from '@/lib/utils/safetyAccess'
 import { SHIRT_W, SHIRT_H, OCCUPANCY_FULL_THRESHOLD } from '@/lib/constants'
 import type { Panel } from '@/lib/supabase/types'
 
@@ -117,36 +118,36 @@ export async function POST(req: NextRequest) {
 
   if (!owner) return NextResponse.json({ error: 'Owner not found', code: 'FORBIDDEN' }, { status: 404 })
 
-  if (owner.shirt_permission === 'locked') {
-    return NextResponse.json({ error: 'Shirt is locked', code: 'FORBIDDEN' }, { status: 403 })
-  }
-
-  if (owner.shirt_permission === 'request_only') {
-    const { data: requestRecord } = await db
+  const [{ data: requestRecord }, { data: scribblerProfile }] = await Promise.all([
+    db
       .from('scribble_requests')
       .select('status')
       .eq('requester_id', user.id)
       .eq('owner_id', owner_id)
-      .single()
+      .maybeSingle(),
+    db
+      .from('users')
+      .select('batch_id, is_suspended')
+      .eq('id', user.id)
+      .single(),
+  ])
 
-    if (!requestRecord || requestRecord.status !== 'approved') {
-      return NextResponse.json(
-        { error: 'Permission required — request first', code: 'FORBIDDEN' },
-        { status: 403 }
-      )
-    }
+  if (scribblerProfile?.is_suspended) {
+    return NextResponse.json({ error: 'Account is suspended', code: 'FORBIDDEN' }, { status: 403 })
   }
 
-  if (owner.shirt_permission === 'batch_only') {
-    const { data: scribbler } = await db
-      .from('users')
-      .select('batch_id')
-      .eq('id', user.id)
-      .single()
-
-    if (!scribbler || scribbler.batch_id !== owner.batch_id) {
-      return NextResponse.json({ error: 'Must be in the same batch', code: 'FORBIDDEN' }, { status: 403 })
-    }
+  const sameBatch = Boolean(owner.batch_id && scribblerProfile?.batch_id && owner.batch_id === scribblerProfile.batch_id)
+  const approvedRequest = requestRecord?.status === 'approved'
+  if (!canAttemptScribble({
+    isOwner: false,
+    permission: owner.shirt_permission,
+    sameBatch,
+    approvedRequest,
+  })) {
+    const message = owner.shirt_permission === 'batch_only' && !sameBatch
+      ? 'Owner approval required for out-of-batch signing'
+      : 'Permission required — request first'
+    return NextResponse.json({ error: message, code: 'FORBIDDEN' }, { status: 403 })
   }
 
   // ── Platform-level checks ─────────────────────────────────

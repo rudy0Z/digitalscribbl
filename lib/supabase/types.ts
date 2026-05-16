@@ -60,6 +60,7 @@ export type Database = {
           shirt_permission:     string
           is_admin:             boolean
           is_suspended:         boolean
+          is_university_verified: boolean
           last_seen:            string | null
           onboarding_completed: boolean
           created_at:           string
@@ -81,6 +82,7 @@ export type Database = {
           shirt_permission?:     string
           is_admin?:             boolean
           is_suspended?:         boolean
+          is_university_verified?: boolean
           onboarding_completed?: boolean
         }
         Update: {
@@ -97,6 +99,7 @@ export type Database = {
           shirt_permission?:     string
           is_admin?:             boolean
           is_suspended?:         boolean
+          is_university_verified?: boolean
           last_seen?:            string | null
           onboarding_completed?: boolean
           updated_at?:           string
@@ -297,6 +300,34 @@ export type Database = {
         Update: Record<string, never>
         Relationships: []
       }
+      user_reports: {
+        Row: {
+          id: string
+          reported_user_id: string
+          reporter_id: string
+          reason: string
+          status: string
+          created_at: string
+          resolved_at: string | null
+          resolved_by: string | null
+        }
+        Insert: {
+          id?: string
+          reported_user_id: string
+          reporter_id: string
+          reason: string
+          status?: string
+          created_at?: string
+          resolved_at?: string | null
+          resolved_by?: string | null
+        }
+        Update: {
+          status?: string
+          resolved_at?: string | null
+          resolved_by?: string | null
+        }
+        Relationships: []
+      }
       scribble_reactions: {
         Row:    { id: string; scribble_id: string; user_id: string; emoji: string; created_at: string }
         Insert: { id?: string; scribble_id: string; user_id: string; emoji: string; created_at?: string }
@@ -398,3 +429,4 @@ export type ScribbleRequestRow = Database['public']['Tables']['scribble_requests
 export type ScribbleReactionRow = Database['public']['Tables']['scribble_reactions']['Row']
 export type ExportRequestRow = Database['public']['Tables']['export_requests']['Row']
 export type ErrorLogRow = Database['public']['Tables']['error_logs']['Row']
+export type UserReportRow = Database['public']['Tables']['user_reports']['Row']

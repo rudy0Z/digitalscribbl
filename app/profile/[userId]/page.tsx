@@ -6,9 +6,11 @@ import NotificationBell from '@/components/notifications/NotificationBell'
 import ShirtView from '@/components/shirt/ShirtView'
 import { ActivityLog } from '@/components/activity/ActivityLog'
 import RequestScribbleButton from './RequestScribbleButton'
+import ReportUserButton from './ReportUserButton'
 import ShareButton from '@/app/dashboard/ShareButton'
 import { ROUTES } from '@/lib/constants'
 import { getPublicSiteUrl } from '@/lib/utils/siteUrl'
+import { canAttemptScribble } from '@/lib/utils/safetyAccess'
 import { buildActivityItems, type ActivityReactionInput, type ActivityScribbleInput, type ActivityUserInput } from '@/lib/utils/activity'
 import type { Panel } from '@/lib/supabase/types'
 
@@ -33,7 +35,7 @@ export default async function ProfilePage({ params, searchParams }: Props) {
     .select(`
       id, display_name, body_style, shirt_color,
       head_front_url, head_back_url, shirt_permission,
-      yearbook_quote, is_suspended,
+      yearbook_quote, is_suspended, batch_id,
       batches(label, graduation_year, programs(name, academic_groups(name)))
     `)
     .eq('id', targetId)
@@ -112,20 +114,25 @@ export default async function ProfilePage({ params, searchParams }: Props) {
     if (target.shirt_permission === 'open') {
       canScribble = true
       permissionState = 'can'
-    } else if (target.shirt_permission === 'batch_only') {
-      const { data: me }    = await supabase.from('users').select('batch_id').eq('id', currentUser.id).single()
-      const { data: owner } = await supabase.from('users').select('batch_id').eq('id', targetId).single()
-      if (me?.batch_id === owner?.batch_id) { canScribble = true; permissionState = 'can' }
-      else permissionState = 'locked'
-    } else if (target.shirt_permission === 'request_only') {
-      const { data: req } = await supabase
+    } else {
+      const [{ data: me }, { data: req }] = await Promise.all([
+        supabase.from('users').select('batch_id').eq('id', currentUser.id).single(),
+        supabase
         .from('scribble_requests')
         .select('status')
         .eq('requester_id', currentUser.id)
         .eq('owner_id', targetId)
-        .single()
-      if (req?.status === 'approved') { canScribble = true; permissionState = 'can' }
-      else permissionState = 'request'
+        .maybeSingle(),
+      ])
+      const sameBatch = Boolean(target.batch_id && me?.batch_id && target.batch_id === me.batch_id)
+      const approvedRequest = req?.status === 'approved'
+      canScribble = canAttemptScribble({
+        isOwner: false,
+        permission: target.shirt_permission,
+        sameBatch,
+        approvedRequest,
+      })
+      permissionState = canScribble ? 'can' : 'request'
     }
   }
 
@@ -333,6 +340,11 @@ export default async function ProfilePage({ params, searchParams }: Props) {
                     ? 'You can sign this shirt now. Open the studio, zoom into the fabric, draw, and save your mark.'
                   : 'You can view this shirt, but signing is currently restricted.'}
               </p>
+              {!isOwner && (
+                <div className="mt-4">
+                  <ReportUserButton userId={targetId} userName={target.display_name} />
+                </div>
+              )}
             </section>
 
             <ActivityLog
