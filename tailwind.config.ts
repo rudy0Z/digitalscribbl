@@ -82,6 +82,26 @@ const config: Config = {
         warning: '#D97706',
         danger:  '#D83F6B',
         info:    '#2563EB',
+        // ── v5 "The Table" (doc 26) — additive, isolated namespace. ──
+        // Butcher-paper craft table: quiet ink chrome, cream ground,
+        // per-student field colour. Values from House Colours [r4] — do not drift.
+        craft: {
+          ink:      '#191410',
+          'ink-soft':  '#4A3A20',
+          'ink-faint': '#6E5A3C',
+          paper:    '#FAF7F0',
+          cotton:   '#FFFFFF',
+          ground:   '#F2EEE4',
+          edge:     '#E4DED0',
+          live:     '#D63830',
+        },
+        field: {
+          marigold: '#E29A2E',
+          cobalt:   '#2F5FA8',
+          forest:   '#3F6B4A',
+          oxblood:  '#7A2E2E',
+          night:    '#191410',
+        },
       },
       fontFamily: {
         display: ['var(--font-display)', 'Georgia', 'serif'],
@@ -89,6 +109,11 @@ const config: Config = {
         marker:  ['var(--font-marker)', 'Caveat', 'cursive'],
         body:    ['var(--font-body)', 'system-ui', 'sans-serif'],
         mono:    ['var(--font-mono)', 'ui-monospace', 'monospace'],
+        // v5 "The Table" type ladder (doc 26) — set per-surface via --tfont-* vars.
+        tdisplay: ['var(--tfont-display)', 'Big Shoulders Display', 'Archivo', 'sans-serif'],
+        tbody:    ['var(--tfont-body)', 'Archivo', 'system-ui', 'sans-serif'],
+        tmono:    ['var(--tfont-mono)', 'IBM Plex Mono', 'ui-monospace', 'monospace'],
+        thand:    ['var(--tfont-hand)', 'Caveat', 'cursive'],
       },
       fontSize: {
         // Slightly larger base for mobile readability
@@ -114,6 +139,9 @@ const config: Config = {
         'paper-deep':  '0 18px 48px rgba(45, 35, 22, 0.10)',
         'sticker':     '0 8px 12px rgba(45, 35, 22, 0.12)',
         'pencil':      'inset 0 0 0 1px rgba(45, 41, 35, 0.12), 0 2px 6px rgba(45, 35, 22, 0.06)',
+        // v5 — die-cut objects sitting on the table (doc 26)
+        'cutout':      '0 10px 24px rgba(25, 20, 16, 0.18), 0 2px 6px rgba(25, 20, 16, 0.12)',
+        'cutout-soft': '0 6px 14px rgba(25, 20, 16, 0.12)',
       },
       animation: {
         'paper-shimmer': 'paper-shimmer 1.8s ease-in-out infinite',
